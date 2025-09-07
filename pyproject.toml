@@ -1,0 +1,22 @@
+[project]
+name = "flowmaster"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.21.0",
+    "bcrypt==3.2.0",
+    "cryptography>=45.0.7",
+    "fastapi>=0.116.1",
+    "greenlet>=3.2.4",
+    "httpx>=0.28.1",
+    "passlib>=1.7.4",
+    "pillow>=10.0.0",
+    "pydantic-settings>=2.10.1",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.1.0",
+    "python-jose[cryptography]>=3.5.0",
+    "sqlalchemy>=2.0.43",
+    "user-agents>=2.2.0",
+    "uvicorn[standard]>=0.35.0",
+]
