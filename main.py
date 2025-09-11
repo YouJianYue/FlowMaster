@@ -18,6 +18,8 @@ from apps.system.auth.controller.auth_controller import router as auth_router
 from apps.common.controller import captcha_router, common_router, tenant_router
 from apps.system.core.controller.user_message_controller import router as user_message_router
 from apps.system.core.controller.dashboard_controller import router as dashboard_router
+from apps.system.core.controller.dept_controller import router as dept_router
+from apps.system.core.controller.user_controller import router as user_router
 
 # 导入中间件
 from apps.common.middleware.jwt_auth_middleware import JWTAuthMiddleware
@@ -146,6 +148,8 @@ app.include_router(common_router)         # 系统公共路由
 app.include_router(tenant_router)         # 租户管理路由
 app.include_router(user_message_router)   # 用户消息路由
 app.include_router(dashboard_router)      # 仪表盘路由
+app.include_router(dept_router)           # 部门管理路由
+app.include_router(user_router)           # 用户管理路由
 
 # 健康检查（增强版）
 @app.get("/health", summary="健康检查")

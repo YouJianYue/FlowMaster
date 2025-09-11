@@ -9,6 +9,7 @@
 from fastapi import APIRouter
 from typing import List
 
+from apps.common.model.api_response import ApiResponse, create_success_response
 from apps.system.core.service.impl.dashboard_service_impl import DashboardServiceImpl
 from apps.system.core.model.resp.dashboard_notice_resp import DashboardNoticeResp
 
@@ -19,7 +20,8 @@ router = APIRouter(prefix="/dashboard", tags=["仪表盘 API"])
 dashboard_service = DashboardServiceImpl()
 
 
-@router.get("/notice", summary="查询公告列表", description="查询公告列表")
-async def list_notice() -> List[DashboardNoticeResp]:
+@router.get("/notice", response_model=ApiResponse[List[DashboardNoticeResp]], summary="查询公告列表", description="查询公告列表")
+async def list_notice():
     """查询公告列表"""
-    return await dashboard_service.list_notice()
+    result = await dashboard_service.list_notice()
+    return create_success_response(data=result)

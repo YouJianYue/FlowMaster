@@ -6,9 +6,8 @@
 
 from typing import Optional
 from sqlalchemy import Column, String, BigInteger, Integer, Boolean, Text
+from pydantic import ConfigDict
 from apps.common.base.model.entity.base_entity import BaseEntity
-from apps.common.enums.dis_enable_status_enum import DisEnableStatusEnum
-from apps.system.core.enums.menu_type_enum import MenuTypeEnum
 
 
 class MenuEntity(BaseEntity):
@@ -17,24 +16,27 @@ class MenuEntity(BaseEntity):
     
     对应数据库表: sys_menu
     对应Java实体: MenuDO
+    完全匹配参考项目的表结构
     """
     
     __tablename__ = "sys_menu"
     
+    model_config = ConfigDict(from_attributes=True)
+    
     # 菜单标题
-    title: str = Column(String(64), nullable=False, comment="菜单标题")
+    title: str = Column(String(30), nullable=False, comment="标题")
     
     # 上级菜单ID（根菜单为0）
     parent_id: int = Column(BigInteger, nullable=False, default=0, comment="上级菜单ID")
     
-    # 菜单类型
-    type: MenuTypeEnum = Column(String(20), nullable=False, comment="菜单类型")
+    # 菜单类型：1=目录，2=菜单，3=按钮
+    type: int = Column(Integer, nullable=False, default=1, comment="类型（1：目录；2：菜单；3：按钮）")
     
     # 路由地址
     path: Optional[str] = Column(String(255), nullable=True, comment="路由地址")
     
     # 组件名称
-    name: Optional[str] = Column(String(64), nullable=True, comment="组件名称")
+    name: Optional[str] = Column(String(50), nullable=True, comment="组件名称")
     
     # 组件路径
     component: Optional[str] = Column(String(255), nullable=True, comment="组件路径")
@@ -43,7 +45,7 @@ class MenuEntity(BaseEntity):
     redirect: Optional[str] = Column(String(255), nullable=True, comment="重定向地址")
     
     # 菜单图标
-    icon: Optional[str] = Column(String(64), nullable=True, comment="菜单图标")
+    icon: Optional[str] = Column(String(50), nullable=True, comment="图标")
     
     # 是否外链
     is_external: bool = Column(Boolean, nullable=False, default=False, comment="是否外链")
@@ -55,44 +57,25 @@ class MenuEntity(BaseEntity):
     is_hidden: bool = Column(Boolean, nullable=False, default=False, comment="是否隐藏")
     
     # 权限标识
-    permission: Optional[str] = Column(String(128), nullable=True, comment="权限标识")
+    permission: Optional[str] = Column(String(100), nullable=True, comment="权限标识")
     
     # 排序
-    sort: int = Column(Integer, nullable=False, default=1, comment="排序")
+    sort: int = Column(Integer, nullable=False, default=999, comment="排序")
     
-    # 状态
-    status: DisEnableStatusEnum = Column(String(10), nullable=False, default=DisEnableStatusEnum.ENABLE.value, comment="状态")
+    # 状态：1=启用，2=禁用
+    status: int = Column(Integer, nullable=False, default=1, comment="状态（1：启用；2：禁用）")
     
-    class Config:
-        """Pydantic配置"""
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "title": "系统管理",
-                "parent_id": 0,
-                "type": "DIR",
-                "path": "/system",
-                "name": "System",
-                "component": "Layout",
-                "redirect": "/system/user",
-                "icon": "system",
-                "is_external": False,
-                "is_cache": False,
-                "is_hidden": False,
-                "permission": "system:*",
-                "sort": 1,
-                "status": "ENABLE",
-                "create_time": "2025-01-18T10:00:00Z",
-                "update_time": "2025-01-18T10:00:00Z"
-            }
-        }
-    
+    # 索引定义（在迁移或初始化时创建）
+    __table_args__ = (
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "comment": "菜单表"}
+    )
+
     def __repr__(self) -> str:
-        return f"<MenuEntity(id={self.id}, title='{self.title}', type='{self.type}', parent_id={self.parent_id})>"
+        return f"<MenuEntity(id={self.id}, title='{self.title}', type={self.type}, parent_id={self.parent_id})>"
     
     def is_enabled(self) -> bool:
         """检查菜单是否启用"""
-        return self.status == DisEnableStatusEnum.ENABLE
+        return self.status == 1
     
     def is_root_menu(self) -> bool:
         """检查是否为根菜单"""
@@ -100,15 +83,15 @@ class MenuEntity(BaseEntity):
     
     def is_directory(self) -> bool:
         """检查是否为目录类型"""
-        return self.type == MenuTypeEnum.DIR
+        return self.type == 1
     
     def is_menu(self) -> bool:
         """检查是否为菜单类型"""
-        return self.type == MenuTypeEnum.MENU
+        return self.type == 2
     
     def is_button(self) -> bool:
         """检查是否为按钮类型"""
-        return self.type == MenuTypeEnum.BUTTON
+        return self.type == 3
     
     def is_visible(self) -> bool:
         """检查菜单是否可见（启用且未隐藏）"""

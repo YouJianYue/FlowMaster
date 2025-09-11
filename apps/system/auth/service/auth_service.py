@@ -216,7 +216,7 @@ class AuthService:
         return True
 
 
-    async def build_user_route_tree(self, user_id: int) -> List[RouteResp]:
+    async def build_user_route_tree(self, user_id: int) -> List[Dict[str, Any]]:
         """
         构建用户路由树（完全对应参考项目的buildRouteTree方法）
         
@@ -224,11 +224,56 @@ class AuthService:
             user_id: 用户ID
             
         Returns:
-            List[RouteResp]: 用户路由树
+            List[Dict[str, Any]]: 用户路由树
         """
-        # 简化实现：在角色和菜单管理模块完成之前，返回空路由树
-        # TODO: 实现完整的角色权限和菜单查询逻辑
-        return []
+        # 使用菜单服务构建用户路由树
+        if self.menu_service:
+            route_tree = await self.menu_service.get_user_route_tree(user_id)
+            # 转换为前端路由格式
+            return self.menu_service.convert_to_route_format(route_tree)
+        
+        # 如果没有菜单服务，返回默认路由树
+        return [
+            {
+                "path": "/system",
+                "name": "System",
+                "component": "Layout",
+                "redirect": "/system/user",
+                "meta": {
+                    "title": "系统管理",
+                    "icon": "settings"
+                },
+                "children": [
+                    {
+                        "path": "/system/user",
+                        "name": "SystemUser",
+                        "component": "system/user/index",
+                        "meta": {
+                            "title": "用户管理",
+                            "icon": "user"
+                        }
+                    },
+                    {
+                        "path": "/system/role",
+                        "name": "SystemRole",
+                        "component": "system/role/index",
+                        "meta": {
+                            "title": "角色管理",
+                            "icon": "user-management"
+                        }
+                    },
+                    {
+                        "path": "/system/menu",
+                        "name": "SystemMenu",
+                        "component": "system/menu/index",
+                        "meta": {
+                            "title": "菜单管理",
+                            "icon": "menu"
+                        }
+                    }
+                ]
+            }
+        ]
     
     async def get_user_permissions(self, user_id: int) -> List[str]:
         """

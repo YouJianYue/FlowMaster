@@ -14,6 +14,63 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/system/common", tags=["系统公共接口"])
 
 
+@router.get("/dict/option/site", summary="获取网站配置选项")
+async def get_site_dict_options():
+    """
+    获取网站配置字典选项
+    
+    返回网站相关的配置选项，如网站标题、描述、版权信息等
+    """
+    try:
+        # 基于参考项目的网站配置数据
+        site_options = [
+            {
+                "label": "SITE_BEIAN",
+                "value": None,  # 备案号为空
+                "disabled": None
+            },
+            {
+                "label": "SITE_COPYRIGHT", 
+                "value": "Copyright © 2022 - present ContiNew Admin 版权所有",
+                "disabled": None
+            },
+            {
+                "label": "SITE_DESCRIPTION",
+                "value": "持续迭代优化的前后端分离中后台管理系统框架",
+                "disabled": None
+            },
+            {
+                "label": "SITE_FAVICON",
+                "value": "/favicon.ico", 
+                "disabled": None
+            },
+            {
+                "label": "SITE_LOGO",
+                "value": "/logo.svg",
+                "disabled": None
+            },
+            {
+                "label": "SITE_TITLE",
+                "value": "ContiNew Admin",
+                "disabled": None
+            }
+        ]
+        
+        return JSONResponse(content={
+            "success": True,
+            "code": "0",
+            "msg": "ok",
+            "data": site_options
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting site dict options: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "code": "500", "msg": "获取网站配置选项失败"}
+        )
+
+
 @router.get("/dict/option/tenant", summary="获取租户字典选项")
 async def get_tenant_dict_options():
     """

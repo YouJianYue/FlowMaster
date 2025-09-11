@@ -60,7 +60,7 @@ async def login(request: LoginRequestUnion, http_request: Request):
         extra_info=extra_info
     )
 
-    return create_success_response(data=login_resp, message="登录成功")
+    return create_success_response(data=login_resp)
 
 
 @router.post("/logout", response_model=ApiResponse[bool], summary="退出登录")
@@ -81,7 +81,7 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
     success = await auth_service.logout(credentials.credentials)
 
     if success:
-        return create_success_response(data=True, message="退出成功")
+        return create_success_response(data=True)
     else:
         raise BusinessException("退出失败")
 
@@ -101,7 +101,7 @@ async def refresh_token(request: RefreshTokenReq):
     auth_service = get_auth_service()
     
     refresh_resp = await auth_service.refresh_token(request)
-    return create_success_response(data=refresh_resp, message="令牌刷新成功")
+    return create_success_response(data=refresh_resp)
 
 
 @router.get("/user/info", response_model=ApiResponse[Dict[str, Any]], summary="获取当前用户信息")
@@ -117,18 +117,18 @@ async def get_user_info():
     
     user_info = await auth_service.get_current_user_info()
     if user_info:
-        return create_success_response(data=user_info, message="获取用户信息成功")
+        return create_success_response(data=user_info)
     else:
         raise HTTPException(status_code=401, detail="用户未登录")
 
 
-@router.get("/user/route", response_model=ApiResponse[List[RouteResp]], summary="获取用户路由")
+@router.get("/user/route", response_model=ApiResponse[List[Dict[str, Any]]], summary="获取用户路由")
 async def get_user_route():
     """
     获取登录用户的路由信息（对应参考项目的/auth/user/route接口）
     
     Returns:
-        ApiResponse[List[RouteResp]]: 用户路由树
+        ApiResponse[List[Dict[str, Any]]]: 用户路由树
     """
     # 获取当前用户上下文
     user_context = UserContextHolder.get_context()
@@ -141,7 +141,7 @@ async def get_user_route():
     # 构建用户路由树
     route_tree = await auth_service.build_user_route_tree(user_context.id)
     
-    return create_success_response(data=route_tree, message="获取路由信息成功")
+    return create_success_response(data=route_tree)
 
 
 @router.get("/check", response_model=ApiResponse[Dict[str, Any]], summary="检查登录状态")
@@ -160,13 +160,11 @@ async def check_login_status():
                 "user_id": user_context.id,
                 "username": user_context.username,
                 "is_super_admin": user_context.is_super_admin_user()
-            },
-            message="已登录"
+            }
         )
     else:
         return create_success_response(
-            data={"logged_in": False},
-            message="未登录"
+            data={"logged_in": False}
         )
 
 
@@ -187,7 +185,7 @@ async def get_social_authorize_url(source: str, client_id: str):
     auth_service = get_auth_service()
     
     authorize_resp = await auth_service.get_social_authorize_url(source, client_id)
-    return create_success_response(data=authorize_resp, message="获取授权地址成功")
+    return create_success_response(data=authorize_resp)
 
 
 @router.post("/social/bind", response_model=ApiResponse[bool], summary="绑定第三方账号")
@@ -207,7 +205,7 @@ async def bind_social_account(request: SocialLoginReq, credentials: HTTPAuthoriz
     
     success = await auth_service.bind_social_account(request)
     if success:
-        return create_success_response(data=True, message="绑定成功")
+        return create_success_response(data=True)
     else:
         raise BusinessException("绑定失败")
 
@@ -229,7 +227,7 @@ async def unbind_social_account(source: str, credentials: HTTPAuthorizationCrede
     
     success = await auth_service.unbind_social_account(source)
     if success:
-        return create_success_response(data=True, message="解绑成功")
+        return create_success_response(data=True)
     else:
         raise BusinessException("解绑失败")
 

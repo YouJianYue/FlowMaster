@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List
 
 from apps.system.core.enums.notice_method_enum import NoticeMethodEnum
+from apps.system.core.model.resp.notice_detail_resp import NoticeDetailResp
 
 
 class NoticeService(ABC):
@@ -26,5 +27,18 @@ class NoticeService(ABC):
             
         Returns:
             List[int]: 未读通知ID列表
+        """
+        pass
+    
+    @abstractmethod
+    async def get_by_id(self, notice_id: int) -> Optional[NoticeDetailResp]:
+        """
+        根据ID获取公告详情
+        
+        Args:
+            notice_id: 公告ID
+            
+        Returns:
+            Optional[NoticeDetailResp]: 公告详情，如果不存在则返回None
         """
         pass

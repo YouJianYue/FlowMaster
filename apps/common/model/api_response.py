@@ -4,15 +4,30 @@
 API统一响应模型
 """
 
-from typing import Optional, TypeVar, Generic
+from typing import Optional, TypeVar, Generic, Union
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
+import time
 
 T = TypeVar('T')
 
 
 class ApiResponse(BaseModel, Generic[T]):
     """API统一响应模型"""
+    
+    # 状态码 - 匹配参考项目格式 
+    code: str = Field(
+        default="0",  # 修改为参考项目的默认值
+        description="响应状态码",
+        examples=["0", "400", "401", "500"]
+    )
+    
+    # 响应消息 - 匹配参考项目格式
+    msg: str = Field(
+        default="ok",  # 修改为参考项目的默认值
+        description="响应消息",
+        examples=["ok", "操作失败", "参数错误", "未授权"]
+    )
     
     # 响应状态 - 不使用函数作为默认值
     success: bool = Field(
@@ -21,18 +36,10 @@ class ApiResponse(BaseModel, Generic[T]):
         examples=[True, False]  # 使用 Field(examples=...) 提供示例
     )
     
-    # 状态码
-    code: str = Field(
-        default="200",
-        description="响应状态码",
-        examples=["200", "400", "401", "500"]
-    )
-    
-    # 响应消息
-    msg: str = Field(
-        default="操作成功",
-        description="响应消息",
-        examples=["操作成功", "操作失败", "参数错误", "未授权"]
+    # 响应时间戳 - 匹配参考项目格式（Unix时间戳毫秒）
+    timestamp: int = Field(
+        default_factory=lambda: int(time.time() * 1000),  # Unix时间戳毫秒
+        description="响应时间戳（Unix时间戳毫秒）"
     )
     
     # 响应数据
@@ -41,12 +48,6 @@ class ApiResponse(BaseModel, Generic[T]):
         description="响应数据",
         examples=[None, {"key": "value"}, [1, 2, 3]]
     )
-    
-    # 响应时间戳
-    timestamp: datetime = Field(
-        default_factory=datetime.now,  # 这个是允许的，因为 datetime.now 是可序列化的
-        description="响应时间戳"
-    )
 
     # 使用 model_config.json_schema_extra 展示文档示例
     model_config = ConfigDict(
@@ -54,22 +55,22 @@ class ApiResponse(BaseModel, Generic[T]):
             "examples": [
                 {
                     "success": True,
-                    "code": "200",
-                    "msg": "登录成功",
+                    "code": "0",
+                    "msg": "ok",
                     "data": {
                         "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
                         "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
                         "token_type": "bearer",
                         "expires_in": 3600
                     },
-                    "timestamp": "2025-09-06T16:30:00.123456"
+                    "timestamp": 1725610200123
                 },
                 {
                     "success": False,
-                    "code": "401",
+                    "code": "401", 
                     "msg": "用户名或密码错误",
                     "data": None,
-                    "timestamp": "2025-09-06T16:30:00.123456"
+                    "timestamp": 1725610200123
                 }
             ]
         }
@@ -77,25 +78,25 @@ class ApiResponse(BaseModel, Generic[T]):
 
 
 # ✅ 正确方式：在视图函数中调用工厂函数，不要作为模型字段默认值
-def create_success_response(data: T = None, message: str = "操作成功", code: int = 200) -> ApiResponse[T]:
-    """创建成功响应 - 在视图函数中使用"""
+def create_success_response(data: T = None, message: str = "ok", code: str = "0") -> ApiResponse[T]:
+    """创建成功响应 - 在视图函数中使用（匹配参考项目格式）"""
     return ApiResponse(
         success=True,
-        code=str(code),  # 转换为字符串类型
+        code=code,  # 成功时默认为"0"
         msg=message,
         data=data,
-        timestamp=datetime.now()
+        timestamp=int(time.time() * 1000)  # Unix时间戳毫秒
     )
 
 
-def create_error_response(message: str = "操作失败", code: int = 500, data: T = None) -> ApiResponse[T]:
+def create_error_response(message: str = "操作失败", code: str = "500", data: T = None) -> ApiResponse[T]:
     """创建失败响应 - 在视图函数中使用"""
     return ApiResponse(
         success=False,
-        code=str(code),  # 转换为字符串类型
+        code=code,  # 保持字符串类型
         msg=message,
         data=data,
-        timestamp=datetime.now()
+        timestamp=int(time.time() * 1000)  # Unix时间戳毫秒
     )
 
 
@@ -104,12 +105,12 @@ class ApiResponseFactory:
     """响应工厂类 - 提供类似 ApiResponse.success() 的接口"""
     
     @staticmethod
-    def success(data: T = None, message: str = "操作成功", code: int = 200) -> ApiResponse[T]:
-        """成功响应"""
+    def success(data: T = None, message: str = "ok", code: str = "0") -> ApiResponse[T]:
+        """成功响应（匹配参考项目格式）"""
         return create_success_response(data, message, code)
     
     @staticmethod  
-    def error(message: str = "操作失败", code: int = 500, data: T = None) -> ApiResponse[T]:
+    def error(message: str = "操作失败", code: str = "500", data: T = None) -> ApiResponse[T]:
         """失败响应"""
         return create_error_response(message, code, data)
 
