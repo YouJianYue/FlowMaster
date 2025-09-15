@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from typing import Optional, List
 
 from apps.common.context.user_context_holder import UserContextHolder
-from apps.common.model.api_response import ApiResponse, create_success_response
+from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.system.core.service.impl.message_service_impl import MessageServiceImpl
 from apps.system.core.service.impl.notice_service_impl import NoticeServiceImpl
 from apps.system.core.model.resp.message_unread_resp import MessageUnreadResp

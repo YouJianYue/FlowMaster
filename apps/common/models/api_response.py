@@ -120,5 +120,5 @@ class ApiResponseFactory:
 # ApiResponse.error = ApiResponseFactory.error
 
 # ✅ 推荐的使用方式：
-# from apps.common.model.api_response import create_success_response, create_error_response
+# from apps.common.models.api_response import create_success_response, create_error_response
 # return create_success_response(data=user_data, message="登录成功")

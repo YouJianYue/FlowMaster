@@ -48,10 +48,28 @@ class DatabaseInitializer:
         # - 超级管理员用户
         # - 基础角色和权限
         # - 系统配置项等
+        # - 菜单数据（新增）
         
         logger.info("Initializing base data...")
         
-        # TODO: 根据需要添加基础数据初始化逻辑
+        # 初始化菜单数据（如果数据库为空）
+        try:
+            from apps.system.core.service.menu_init_service import MenuInitService
+            await MenuInitService.init_menus_if_empty()
+        except Exception as e:
+            logger.error(f"Failed to initialize menu data: {e}")
+            # 菜单初始化失败不应该阻断整个初始化过程
+            # 但需要记录错误以便调试
+        
+        # 初始化权限体系（菜单数据初始化后）
+        try:
+            from apps.system.core.service.permission_init_service import permission_init_service
+            await permission_init_service.init_permissions()
+        except Exception as e:
+            logger.error(f"Failed to initialize permission system: {e}")
+            # 权限初始化失败不应该阻断整个初始化过程
+        
+        # TODO: 根据需要添加其他基础数据初始化逻辑
         # async with DatabaseSession.get_session_context() as session:
         #     # 检查是否已有超级管理员
         #     # 如果没有，创建默认的超级管理员

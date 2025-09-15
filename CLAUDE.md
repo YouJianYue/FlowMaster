@@ -158,6 +158,104 @@
 
 ### 🎯 下一步开发计划
 
+#### **🚀 阶段二：权限管理系统实现 (当前紧急目标)** 🔥🔥🔥
+
+**基于菜单管理接口实现过程中发现的关键问题，紧急调整开发重点:**
+
+**🚨 核心问题**: 菜单管理页面操作列不显示，根本原因是权限体系不完整
+
+**🔍 问题分析 (2025-09-13 发现)**:
+1. **前端权限检查**: 菜单管理页面操作列显示依赖 `has.hasPermOr(['system:menu:update', 'system:menu:delete', 'system:menu:create'])`
+2. **权限数据缺失**: `/auth/user/info` 接口返回的 `permissions` 数组为空 `[]`
+3. **权限体系不完整**: 缺少用户→角色→权限→菜单的完整RBAC关联
+
+**🔥 立即实施的解决方案:**
+
+##### 1. **用户权限接口完善** 🚨 (最高优先级)
+- **目标**: 让 `/auth/user/info` 接口返回正确的权限数组
+- **实现**: 
+  ```python
+  # 用户信息返回格式
+  {
+    "id": 1,
+    "username": "admin",
+    "permissions": [
+      "system:menu:list", "system:menu:create", "system:menu:update", "system:menu:delete",
+      "system:user:list", "system:user:create", "system:user:update", "system:user:delete",
+      // ... 更多权限
+    ],
+    "roles": ["super_admin"]
+  }
+  ```
+
+##### 2. **权限查询服务** 🔥 (高优先级)
+- **简化实现**: 超级管理员(ID=1)获得所有菜单权限，普通用户获得基础权限
+- **数据源**: 从 `sys_menu` 表查询所有 `permission` 字段不为空的权限标识
+- **查询逻辑**: 
+  ```sql
+  SELECT DISTINCT permission FROM sys_menu 
+  WHERE permission IS NOT NULL AND status = 1
+  ```
+
+##### 3. **RBAC权限体系基础** 🔥 (中优先级)
+- **用户角色关联**: 实现 `sys_user_role` 表的基础查询
+- **角色菜单关联**: 实现 `sys_role_menu` 表的基础查询  
+- **权限继承**: 用户通过角色获得菜单权限
+
+**🎯 阶段二预期成果:**
+- ✅ **操作列正常显示**: 菜单管理页面操作按钮正常显示
+- ✅ **权限控制生效**: 前端根据用户权限显示/隐藏功能
+- ✅ **权限体系就绪**: 为后续模块权限控制奠定基础
+
+**⚠️ 重要发现**: 
+- 菜单数据已完整(152个菜单) ✅
+- 菜单接口已实现(/system/menu/tree) ✅  
+- **核心阻塞**: 权限体系缺失导致前端功能受限 🚨
+
+**📋 实现优先级调整**:
+1. **紧急**: 权限接口实现 → 解决操作列显示问题
+2. **高优先级**: 基础RBAC体系 → 完善权限控制
+3. **后续**: 其他业务模块 → 用户管理、角色管理等
+
+#### **🔧 阶段一.8：菜单管理接口实现 (2025-09-13 完成)** ✅
+**目标**: 实现菜单管理相关接口，支持前端菜单管理功能
+
+**✅ 完成内容:**
+1. **菜单数据库初始化优化** 🗄️
+   - 废弃硬编码菜单文件 (`menu_initial_data.py`)
+   - 创建数据库驱动的菜单初始化服务 (`MenuInitService`)
+   - 完整的152个菜单数据，包含所有模块（系统管理、系统监控、租户管理、能力开放、任务调度、开发工具）
+   - 集成到应用启动流程，支持数据库为空时自动初始化
+
+2. **菜单管理API接口** 🌐
+   - `GET /system/menu/tree` - 获取完整菜单树（管理后台用）
+   - `GET /system/menu/user/tree` - 获取用户权限菜单树
+   - `GET /system/menu/route/tree` - 获取路由配置菜单树（前端路由用）
+   - `GET /system/menu/{id}` - 获取菜单详情
+
+3. **菜单服务层** 🏗️
+   - `MenuServiceImpl` - 数据库驱动的菜单服务
+   - 自动格式转换 - snake_case字段自动转换为camelCase响应
+   - 树结构构建 - 自动构建层级菜单树
+   - 权限过滤支持 - 支持根据用户权限过滤菜单
+
+4. **响应格式优化** 📋
+   - 完全匹配参考项目接口格式
+   - 正确的数据类型 (`type: 1`, `status: 1` 为整数)
+   - 正确的时间格式 (`"createTime": "2025-08-14 08:54:38"`)
+   - 完整字段支持 (包含`disabled`, `createUserString`等)
+
+**🚨 发现的关键问题:**
+- **菜单管理页面操作列不显示** ❌
+- **根本原因**: 前端权限检查失败，`permissions` 数组为空
+- **影响范围**: 所有需要权限控制的管理页面
+- **解决方案**: 必须优先实现权限管理系统
+
+**📊 菜单模块完成度:**
+- **菜单数据**: 100% 完成 ✅ (152个菜单，完全匹配参考项目)
+- **菜单接口**: 90% 完成 ✅ (查询接口完成，CRUD接口待补全)
+- **权限集成**: 0% 完成 ❌ (权限体系缺失)
+
 #### **✅ 阶段一：完善登录模块 (已完成)** 
 **目标**: 完全匹配参考项目的登录接口 **✅ 已达成**
 
@@ -332,27 +430,31 @@
 
 ### 🏆 项目亮点
 
-**📊 当前完成度统计 (2025-09-10 重新评估):**
+**📊 当前完成度统计 (2025-09-13 重新评估):**
 - **基础模块**: 100% 完成 ✅
-- **认证授权模块**: 90% 完成 (缺少route权限树接口) ⚠️ 
-- **系统核心模块**: 5% 完成 (仅实现消息通知查询接口) ⚠️
-- **总体进度**: 约 35% (基础架构完整，但核心业务功能大量缺失)
+- **认证授权模块**: 95% 完成 (已补全菜单管理接口) ✅ 
+- **系统核心模块**: 25% 完成 (菜单管理接口已实现) ⚠️
+- **权限管理系统**: 0% 完成 (紧急需要实现) 🚨
+- **总体进度**: 约 40% (菜单接口完成，但权限体系是关键阻塞点)
 
-**⚠️ 重要发现**: 经过详细分析参考项目，发现实际完成度远低于预期
-- **参考项目**: 20个控制器，约60+个核心接口
-- **当前实现**: 2个控制器，3个接口 + 认证体系
+**⚠️ 重要发现**: 菜单管理接口实现过程中发现权限体系缺失是关键阻塞点
+- **参考项目**: 20个控制器，约60+个核心接口 + 完整RBAC权限体系
+- **当前实现**: 3个控制器，菜单+消息接口 + 认证体系 + **权限体系缺失** 🚨
+- **关键缺失**: 用户权限数据返回，导致前端功能受限（如操作列不显示）
 - **关键缺失**: 用户管理、角色管理、菜单管理、权限体系等核心功能
 
 **🎯 核心特性:**
 - **完整的认证授权体系**: 8个REST API + 多态登录处理器 ✅
+- **完整的菜单管理体系**: 4个菜单API + 数据库驱动菜单初始化 ✅
 - **企业级安全保障**: RSA加密 + JWT令牌 + OAuth授权 ✅
 - **完整的基础架构**: 异常处理、上下文管理、工具类等 ✅
 - **现代化技术栈**: FastAPI + Pydantic v2 + SQLAlchemy ✅
 - **生产级代码质量**: 0警告 + 0错误 + 企业级架构模式 ✅
 - **异步安全**: 使用ContextVar确保异步环境下的线程安全 ✅
-- **移植准确性**: 架构与参考项目100%匹配，业务逻辑75%匹配 ✅
+- **移植准确性**: 架构与参考项目100%匹配，业务逻辑80%匹配 ✅
 - **静态方法优化**: 7个方法优化为静态，提升代码组织性 ✅
-- **🔥 核心接口实现**: 消息通知、仪表盘接口完成，首页功能正常 ✅
+- **🔥 菜单数据完整**: 152个菜单，包含所有模块，与参考项目完全一致 ✅
+- **🚨 权限体系缺失**: 影响前端功能交互，需紧急实现 ❌
 
 **🏗️ 架构优势:**
 - **高性能**: 完全异步实现，支持高并发访问
@@ -369,6 +471,31 @@
 - 正确区分 `ConfigDict` (用于BaseModel) 和 `SettingsConfigDict` (用于BaseSettings)
 - Field字段使用 `json_schema_extra={"example": value}` 语法
 - 避免使用 `example=value` 参数
+
+### Pydantic字段命名和序列化规范 🔥 **重要配置**
+- **Python字段统一使用snake_case**: 如`parent_id`, `is_external`, `create_user`, `create_time`
+- **API响应自动转camelCase**: 配置`alias_generator=to_camel`自动转换为`parentId`, `isExternal`, `createUser`, `createTime`
+- **保持代码一致性**: 所有Python代码内部使用snake_case，对外API自动转换为camelCase
+- **配置示例**:
+  ```python
+  from pydantic import ConfigDict
+  from pydantic.alias_generators import to_camel
+  
+  class MenuResponse(BaseModel):
+      parent_id: int = Field(..., description="上级菜单ID")
+      is_external: bool = Field(..., description="是否外链")
+      create_user: int = Field(..., description="创建人")
+      
+      model_config = ConfigDict(
+          from_attributes=True,
+          alias_generator=to_camel,  # 自动转换为parentId, isExternal, createUser
+          populate_by_name=True      # 同时支持原字段名和别名
+      )
+  ```
+- **重要原则**: 
+  - ✅ **内部代码一致**: Python代码内部统一使用snake_case
+  - ✅ **API响应规范**: 通过Pydantic自动转换为前端期望的camelCase
+  - ❌ **禁止字段混用**: 不要在同一项目中混用snake_case和camelCase字段名
 
 ### 全局异常处理架构 ✅
 - 实现企业级全局异常处理器 (`global_exception_handler.py`)
@@ -417,6 +544,23 @@
   - `BaseDO` → `BaseEntity`
   - `BaseResp` → `BaseResponse`
   - `BaseException` → `CustomBaseException` (避免覆盖BaseException内置)
+
+### 字段命名规范 🔥 **重要约定**
+- **统一使用Python风格**: 所有字段使用snake_case命名（如`parent_id`, `is_external`, `create_user`）
+- **禁止为匹配前端而改字段名**: 不要因为前端API返回使用驼峰格式就修改Python字段名
+- **Pydantic自动转换**: Pydantic的`ConfigDict(alias_generator=to_camel)`会自动处理snake_case到camelCase的转换
+- **保持代码一致性**: 所有Python代码（实体、服务、控制器）都使用snake_case
+- **示例**:
+  ```python
+  # ✅ 正确 - Python字段使用snake_case
+  parent_id: int = Column(BigInteger, comment="上级菜单ID")
+  is_external: bool = Column(Boolean, comment="是否外链")
+  create_user: int = Column(BigInteger, comment="创建人")
+  
+  # ❌ 错误 - 不要为了匹配API返回而使用驼峰
+  parentId: int = Column(BigInteger, comment="上级菜单ID")  # 错误！
+  isExternal: bool = Column(Boolean, comment="是否外链")  # 错误！
+  ```
 
 ### 框架替换
 - **MyBatis → SQLAlchemy**: 使用SQLAlchemy ORM替换MyBatis
@@ -562,6 +706,126 @@ curl -X GET "http://localhost:8000/user/message/notice/unread/POPUP" \
 2. 使用 `ContextVar` 确保异步上下文隔离安全
 3. Pydantic字段使用 `default=None` 编码默认值，而不使用 `None` 作为第一个参数
 4. RSA加密工具需要配置环境变量 `FLOWMASTER_SECURITY_CRYPTO_PRIVATE_KEY` 和 `FLOWMASTER_SECURITY_CRYPTO_PUBLIC_KEY`
+5. **🔥 字段命名规范**: 所有Python字段统一使用snake_case（如`parent_id`, `is_external`），通过Pydantic自动转换为camelCase响应格式，**禁止为匹配前端API而修改Python字段名**
+
+## 🚨 **开发规范要求 (2025-09-15 新增)**
+
+### **1. 一比一复刻原则** 🔥🔥🔥
+- **实体类**: 必须完全按照参考项目的实体类定义，字段名、类型、关系映射完全一致
+- **接口定义**: API路径、HTTP方法、请求响应格式必须与参考项目100%匹配
+- **服务实现**: 业务逻辑必须参考参考项目的Service实现，不允许自己编造方法
+- **禁止创造**: 不允许创建参考项目中不存在的类、方法、接口
+
+### **2. 参考项目研读要求** 📚
+- **先看参考项目**: 每次实现功能前，必须先仔细阅读参考项目的相关代码
+- **理解后实现**: 理解参考项目的实现逻辑后，再进行Python版本的移植
+- **保持一致性**: 确保移植后的功能与参考项目行为完全一致
+
+### **3. 禁止的行为** ❌
+- ❌ **禁止编造方法**: 不允许自己想象或编造不存在的业务方法
+- ❌ **禁止创建多版本**: 不允许创建multiple版本的同一个类 (如Simple, Standalone等)
+- ❌ **禁止绕过ORM**: 必须使用SQLAlchemy ORM，不允许用原生SQL绕过
+- ❌ **禁止随意删除**: 不允许随意删除参考项目中存在的字段或关系
+
+### **4. 正确的开发流程** ✅
+1. **阅读参考项目代码** - 完整理解要实现的功能
+2. **分析实体关系** - 理解数据库表结构和关系映射
+3. **一对一移植** - 按照参考项目的结构进行精确移植
+4. **测试验证** - 确保移植后的功能与参考项目一致
+5. **修复问题** - 针对具体问题进行精确修复，不做大范围改动
+
+### **5. SQLAlchemy关系映射要求** 🔗
+- **必须使用relationship**: 不允许注释掉或删除实体间的关系映射
+- **解决循环引用**: 使用正确的TYPE_CHECKING和字符串引用解决循环导入
+- **保持完整性**: 确保双向关系的back_populates设置正确
+- **参考标准实现**: 参考SQLAlchemy官方文档和最佳实践
+
+## 📚 参考项目代码位置参考 (2025-09-13 整理)
+
+### 🔐 **权限管理系统代码位置**
+
+**主目录**: `refrence/continew-admin/continew-system/src/main/java/top/continew/admin/system/`
+
+#### **1. 控制器层 (Controller)**
+- `controller/RoleController.java` - 角色管理控制器
+  - 角色CRUD、权限分配、用户角色管理
+- `controller/MenuController.java` - 菜单管理控制器  
+  - 菜单CRUD、菜单树、权限清除缓存
+- `controller/UserController.java` - 用户管理控制器
+  - 用户CRUD、角色分配、密码管理
+
+#### **2. 服务层 (Service)**
+- `service/RoleService.java` - 角色业务服务
+- `service/MenuService.java` - **菜单业务服务 (权限查询核心)**
+  - 🔥 **关键方法**: `listPermissionByUserId(Long userId)` - 根据用户ID查询权限码集合
+  - 这是解决操作列显示问题的核心方法！
+- `service/UserService.java` - 用户业务服务
+- `service/UserRoleService.java` - 用户角色关联服务
+- `service/RoleMenuService.java` - 角色菜单关联服务
+- `service/RoleDeptService.java` - 角色部门关联服务
+
+#### **3. 实体层 (Entity)**
+- `model/entity/RoleDO.java` - 角色实体
+- `model/entity/MenuDO.java` - 菜单实体  
+- `model/entity/UserRoleDO.java` - 用户角色关联实体
+- `model/entity/RoleMenuDO.java` - 角色菜单关联实体
+- `model/entity/RoleDeptDO.java` - 角色部门关联实体
+
+#### **4. 数据访问层 (Mapper)**
+- `mapper/RoleMapper.java` - 角色数据访问
+- `mapper/MenuMapper.java` - 菜单数据访问
+- `mapper/UserRoleMapper.java` - 用户角色关联数据访问
+- `mapper/RoleMenuMapper.java` - 角色菜单关联数据访问
+
+#### **5. SQL映射文件**
+- `resources/mapper/RoleMapper.xml` - 角色查询SQL
+- `resources/mapper/MenuMapper.xml` - 菜单查询SQL
+- `resources/mapper/UserRoleMapper.xml` - 用户角色关联SQL
+- `resources/mapper/RoleMenuMapper.xml` - 角色菜单关联SQL
+
+### 🏢 **租户管理系统代码位置**
+
+**主目录**: `refrence/continew-admin/continew-plugin/continew-plugin-tenant/`
+
+#### **租户系统确认**: ✅ **有完整的多租户系统**
+
+**核心组件**:
+- `controller/TenantController.java` - 租户管理控制器
+- `controller/PackageController.java` - 套餐管理控制器
+- `service/TenantService.java` - 租户业务服务
+- `service/PackageService.java` - 套餐业务服务
+- `service/PackageMenuService.java` - 套餐菜单关联服务
+- `model/entity/TenantDO.java` - 租户实体
+- `model/entity/PackageDO.java` - 套餐实体
+
+**租户功能**:
+- 租户数据隔离、套餐权限管理、租户管理员密码管理等
+
+### 🔑 **权限查询核心逻辑**
+
+**关键发现**: `MenuService.listPermissionByUserId(Long userId)` 方法是解决当前操作列显示问题的关键
+
+**权限查询流程**:
+```
+用户ID → 查询用户角色 → 查询角色菜单 → 提取菜单权限 → 返回权限集合
+```
+
+**对应的SQL查询**:
+```sql
+SELECT DISTINCT m.permission FROM sys_menu m 
+JOIN sys_role_menu rm ON m.id = rm.menu_id 
+JOIN sys_user_role ur ON rm.role_id = ur.role_id 
+WHERE ur.user_id = ? AND m.permission IS NOT NULL AND m.status = 1
+```
+
+### 📋 **下次开发重点参考**
+
+1. **权限查询服务** - 参考 `MenuService.listPermissionByUserId()` 实现
+2. **角色管理服务** - 参考 `RoleService` 和 `UserRoleService` 实现  
+3. **RBAC体系建立** - 参考实体关联关系和SQL映射
+4. **租户系统** - 后期可参考 `continew-plugin-tenant` 插件实现
+
+**🎯 核心目标**: 实现 `listPermissionByUserId()` 等效方法，让前端获取到权限数据，解决操作列显示问题。
 
 ## 跨平台兼容性
 - **路径分隔符**: 所有路径使用相对路径，兼容 Windows、macOS、Linux

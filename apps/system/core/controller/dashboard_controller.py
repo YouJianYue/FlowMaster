@@ -9,7 +9,7 @@
 from fastapi import APIRouter
 from typing import List
 
-from apps.common.model.api_response import ApiResponse, create_success_response
+from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.system.core.service.impl.dashboard_service_impl import DashboardServiceImpl
 from apps.system.core.model.resp.dashboard_notice_resp import DashboardNoticeResp
 

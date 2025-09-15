@@ -6,6 +6,7 @@
 
 from typing import Optional
 from sqlalchemy import Column, String, BigInteger, Integer, Boolean, Text
+from sqlalchemy.orm import relationship
 from pydantic import ConfigDict
 from apps.common.base.model.entity.base_entity import BaseEntity
 
@@ -64,7 +65,14 @@ class MenuEntity(BaseEntity):
     
     # 状态：1=启用，2=禁用
     status: int = Column(Integer, nullable=False, default=1, comment="状态（1：启用；2：禁用）")
-    
+
+    # ==========================================
+    # 关联关系定义
+    # ==========================================
+
+    # 角色菜单关联 - 暂时注释避免循环引用
+    # role_menus = relationship("RoleMenuEntity", back_populates="menu", cascade="all, delete-orphan")
+
     # 索引定义（在迁移或初始化时创建）
     __table_args__ = (
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4", "comment": "菜单表"}

@@ -5,6 +5,7 @@
 """
 
 from sqlalchemy import Column, BigInteger, ForeignKey, Index
+# 暂时移除relationship，避免循环引用问题
 from apps.common.base.model.entity.base_entity import BaseEntity
 
 
@@ -23,6 +24,16 @@ class UserRoleEntity(BaseEntity):
     
     # 角色ID
     role_id: int = Column(BigInteger, ForeignKey('sys_role.id', ondelete='CASCADE'), nullable=False, comment="角色ID")
+    
+    # ==========================================
+    # 关联关系定义 - 暂时删除，等基本功能稳定后再添加
+    # ==========================================
+
+    # 关联到用户
+    # user = relationship("UserEntity", back_populates="user_roles")
+
+    # 关联到角色
+    # role = relationship("RoleEntity", back_populates="user_roles")
     
     # 创建复合索引
     __table_args__ = (

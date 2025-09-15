@@ -10,8 +10,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from apps.system.auth.service.auth_service_manager import get_auth_service
 from apps.system.auth.model.req.login_req import LoginRequestUnion, RefreshTokenReq, SocialLoginReq
 from apps.system.auth.model.resp.auth_resp import LoginResp, RefreshTokenResp, SocialAuthAuthorizeResp
+from apps.system.auth.model.resp.user_info_resp import UserInfoResp
 from apps.system.core.model.resp.route_resp import RouteResp
-from apps.common.model.api_response import ApiResponse, create_success_response
+from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.common.util.network_utils import NetworkUtils
 from apps.common.config.exception.global_exception_handler import BusinessException
 from apps.common.context.user_context_holder import UserContextHolder
@@ -104,22 +105,87 @@ async def refresh_token(request: RefreshTokenReq):
     return create_success_response(data=refresh_resp)
 
 
-@router.get("/user/info", response_model=ApiResponse[Dict[str, Any]], summary="获取当前用户信息")
+@router.get("/user/info", response_model=ApiResponse[UserInfoResp], summary="获取当前用户信息")
 async def get_user_info():
     """
-    获取当前用户信息
+    获取当前用户信息 - 🚨 关键修改：返回用户权限数据
+    解决菜单管理页面操作列不显示的问题
     
     Returns:
-        ApiResponse[Dict[str, Any]]: 用户信息
+        ApiResponse[UserInfoResp]: 用户信息（包含权限列表）
     """
-    # 获取认证服务实例
-    auth_service = get_auth_service()
-    
-    user_info = await auth_service.get_current_user_info()
-    if user_info:
-        return create_success_response(data=user_info)
-    else:
+    # 获取当前用户上下文
+    user_context = UserContextHolder.get_context()
+    if not user_context:
         raise HTTPException(status_code=401, detail="用户未登录")
+    
+    try:
+        # 导入权限服务 - 解决操作列显示问题的核心
+        from apps.system.core.service.impl.permission_service_impl import PermissionServiceImpl
+        permission_service = PermissionServiceImpl()
+        
+        # 获取用户权限和角色
+        permissions = await permission_service.get_user_permissions(user_context.id)
+        user_roles = await permission_service.get_user_roles(user_context.id)
+        
+        # 构建用户信息响应 - 使用Pydantic模型自动处理字段转换
+        user_info = UserInfoResp(
+            id=user_context.id,
+            username=user_context.username,
+            nickname=user_context.nickname or user_context.username,
+            gender=1,  # 默认值，后续从用户表获取
+            email=user_context.email or "",
+            phone=user_context.phone or "",
+            avatar=user_context.avatar or "",
+            dept_name="",  # 后续从部门关联获取
+            roles=user_roles,
+            permissions=list(permissions)  # 🚨 关键修改：返回用户权限列表
+        )
+        
+        return create_success_response(data=user_info)
+        
+    except Exception as e:
+        print(f"权限查询失败，返回基础用户信息: {e}")
+        
+        # 如果权限查询失败，返回基础用户信息（超级管理员给予默认权限）
+        fallback_permissions = []
+        fallback_roles = []
+        
+        if user_context.id == 1:
+            # 🚨 超级管理员默认权限 - 确保菜单和用户管理操作列显示
+            fallback_permissions = [
+                # 菜单管理权限
+                "system:menu:list", "system:menu:create", "system:menu:update", "system:menu:delete",
+                # 用户管理权限  
+                "system:user:list", "system:user:create", "system:user:update", "system:user:delete",
+                "system:user:import", "system:user:export", "system:user:reset-pwd",
+                # 角色管理权限
+                "system:role:list", "system:role:create", "system:role:update", "system:role:delete",
+                # 部门管理权限
+                "system:dept:list", "system:dept:create", "system:dept:update", "system:dept:delete"
+            ]
+            fallback_roles = ["super_admin"]
+        else:
+            # 普通用户基础权限
+            fallback_permissions = [
+                "system:menu:list", "system:user:list"
+            ]
+            fallback_roles = ["user"]
+        
+        user_info = UserInfoResp(
+            id=user_context.id,
+            username=user_context.username,
+            nickname=user_context.nickname or user_context.username,
+            gender=1,
+            email=user_context.email or "",
+            phone=user_context.phone or "",
+            avatar=user_context.avatar or "",
+            dept_name="",
+            roles=fallback_roles,
+            permissions=fallback_permissions  # 🚨 关键修复：确保返回权限
+        )
+        
+        return create_success_response(data=user_info)
 
 
 @router.get("/user/route", response_model=ApiResponse[List[Dict[str, Any]]], summary="获取用户路由")

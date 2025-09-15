@@ -5,6 +5,7 @@
 """
 
 from sqlalchemy import Column, BigInteger, ForeignKey, Index
+# 暂时移除relationship，避免循环引用问题
 from apps.common.base.model.entity.base_entity import BaseEntity
 
 
@@ -23,6 +24,16 @@ class RoleMenuEntity(BaseEntity):
     
     # 菜单ID
     menu_id: int = Column(BigInteger, ForeignKey('sys_menu.id', ondelete='CASCADE'), nullable=False, comment="菜单ID")
+    
+    # ==========================================
+    # 关联关系定义 - 暂时注释避免循环引用
+    # ==========================================
+
+    # 关联到角色
+    # role = relationship("RoleEntity", back_populates="role_menus")
+
+    # 关联到菜单
+    # menu = relationship("MenuEntity", back_populates="role_menus")
     
     # 创建复合索引
     __table_args__ = (

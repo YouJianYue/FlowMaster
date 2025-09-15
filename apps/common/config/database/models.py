@@ -26,8 +26,10 @@ try:
     from apps.system.core.model.entity.user_entity import UserEntity
     from apps.system.core.model.entity.role_entity import RoleEntity
     from apps.system.core.model.entity.menu_entity import MenuEntity
+    from apps.system.core.model.entity.dept_entity import DeptEntity
     from apps.system.core.model.entity.user_role_entity import UserRoleEntity
     from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
+    from apps.system.core.model.entity.role_dept_entity import RoleDeptEntity
     from apps.system.core.model.entity.client_entity import ClientEntity
 except ImportError as e:
     # 如果某些实体类不存在，跳过（开发阶段可能未完成）

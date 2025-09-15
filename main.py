@@ -20,6 +20,7 @@ from apps.system.core.controller.user_message_controller import router as user_m
 from apps.system.core.controller.dashboard_controller import router as dashboard_router
 from apps.system.core.controller.dept_controller import router as dept_router
 from apps.system.core.controller.user_controller import router as user_router
+from apps.system.core.controller.menu_controller import router as menu_router
 
 # 导入中间件
 from apps.common.middleware.jwt_auth_middleware import JWTAuthMiddleware
@@ -74,7 +75,22 @@ async def lifespan(app: FastAPI):
         # 检查数据库状态
         db_status = await check_db_status()
         logger.info(f"📊 数据库状态: {db_status}")
-        
+
+        # 3. 初始化基础数据（使用参考项目SQL文件）
+        logger.info("📋 初始化基础数据（使用参考项目SQL文件）...")
+        try:
+            from apps.common.config.database.database_init_service import DatabaseInitService
+            db_init_service = DatabaseInitService()
+            success = await db_init_service.init_database(force_reinit=False)
+
+            if success:
+                logger.info("✅ 基础数据初始化完成")
+            else:
+                logger.warning("⚠️ 基础数据初始化失败")
+        except Exception as init_error:
+            logger.warning(f"⚠️ 基础数据初始化失败: {init_error}")
+            # 不阻塞应用启动，继续运行
+
         logger.info("✅ FlowMaster 应用启动成功!")
         
         # 应用运行期间
@@ -150,6 +166,7 @@ app.include_router(user_message_router)   # 用户消息路由
 app.include_router(dashboard_router)      # 仪表盘路由
 app.include_router(dept_router)           # 部门管理路由
 app.include_router(user_router)           # 用户管理路由
+app.include_router(menu_router)           # 菜单管理路由
 
 # 健康检查（增强版）
 @app.get("/health", summary="健康检查")
