@@ -7,13 +7,15 @@
 """
 
 from typing import Optional, Union
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import select, and_, or_, func, delete
 from sqlalchemy.orm import selectinload
 
 from ..user_service import UserService
+from apps.system.core.model.req.user_req import UserUpdateReq
 from apps.system.core.model.resp.user_resp import UserResp
 from apps.system.core.model.resp.user_detail_resp import UserDetailResp
 from apps.system.core.model.entity.user_entity import UserEntity
+from apps.system.core.model.entity.user_role_entity import UserRoleEntity
 from apps.common.models.page_resp import PageResp
 from apps.common.config.database.database_session import DatabaseSession
 from apps.common.config.logging import get_logger
@@ -131,6 +133,40 @@ class UserServiceImpl(UserService):
         except Exception as e:
             self.logger.error(f"获取用户详情失败: {e}")
             raise
+
+    async def update_user(self, user_id: int, update_req: UserUpdateReq):
+        """
+        更新用户信息
+        """
+        async with DatabaseSession.get_session_context() as session:
+            # 1. 查询用户
+            user = await session.get(UserEntity, user_id)
+            if not user:
+                raise ValueError(f"用户不存在: {user_id}")
+
+            # 2. 更新用户基本信息
+            user.nickname = update_req.nickname
+            user.phone = update_req.phone
+            user.email = update_req.email
+            user.gender = update_req.gender
+            user.status = update_req.status
+            user.description = update_req.description
+            user.dept_id = update_req.dept_id
+            
+            # 3. 更新用户角色关联
+            # 3a. 删除旧的角色关联
+            await session.execute(
+                delete(UserRoleEntity).where(UserRoleEntity.user_id == user_id)
+            )
+            
+            # 3b. 添加新的角色关联
+            if update_req.role_ids:
+                for role_id in update_req.role_ids:
+                    user_role = UserRoleEntity(user_id=user_id, role_id=role_id)
+                    session.add(user_role)
+            
+            # 4. 提交事务
+            await session.commit()
 
     def _entity_to_resp(self, entity: UserEntity) -> UserResp:
         """

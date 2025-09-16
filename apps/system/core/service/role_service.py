@@ -121,22 +121,23 @@ class RoleService:
             Set[str]: 权限码集合
         """
         try:
-            async with DatabaseSession.get_session_context() as session:
-                # 执行核心权限查询SQL：
-                # SELECT DISTINCT m.permission FROM sys_menu m
-                # JOIN sys_role_menu rm ON m.id = rm.menu_id
-                # JOIN sys_user_role ur ON rm.role_id = ur.role_id
-                # WHERE ur.user_id = ? AND m.permission IS NOT NULL AND m.status = 1
+            # 检查是否为超级管理员
+            is_super_admin = await self.is_super_admin_user(user_id)
+            if is_super_admin:
+                self.logger.debug(f"用户 {user_id} 是超级管理员，返回所有权限。")
+                return await self.get_all_permissions_for_super_admin()
 
+            # 对于非超级管理员，执行基于角色的权限查询
+            async with DatabaseSession.get_session_context() as session:
+                # SQLAlchemy 会自动通过我们定义的 relationship 进行 join
                 stmt = (
-                    select(MenuEntity.permission)
-                    .distinct()
-                    .join(RoleMenuEntity, MenuEntity.id == RoleMenuEntity.menu_id)
-                    .join(UserRoleEntity, RoleMenuEntity.role_id == UserRoleEntity.role_id)
+                    select(MenuEntity.permission).distinct()
+                    .join(MenuEntity.roles)
+                    .join(RoleEntity.user_roles)
                     .where(
                         UserRoleEntity.user_id == user_id,
                         MenuEntity.permission.isnot(None),
-                        MenuEntity.status == 1  # 只查询启用的菜单
+                        MenuEntity.status == 1
                     )
                 )
 
