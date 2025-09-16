@@ -44,9 +44,8 @@ class RoleEntity(BaseEntity):
     
     # 部门选择是否父子节点关联
     dept_check_strictly: bool = Column(Boolean, nullable=False, default=True, comment="部门选择是否父子节点关联")
-    
-    # 状态：1=启用，2=禁用
-    status: int = Column(Integer, nullable=False, default=1, comment="状态（1：启用；2：禁用）")
+
+    # 注意：参考项目的sys_role表没有status字段，已移除
     
     # ==========================================
     # 关联关系定义 - 暂时删除所有关系映射

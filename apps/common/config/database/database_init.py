@@ -61,13 +61,8 @@ class DatabaseInitializer:
             # 菜单初始化失败不应该阻断整个初始化过程
             # 但需要记录错误以便调试
         
-        # 初始化权限体系（菜单数据初始化后）
-        try:
-            from apps.system.core.service.permission_init_service import permission_init_service
-            await permission_init_service.init_permissions()
-        except Exception as e:
-            logger.error(f"Failed to initialize permission system: {e}")
-            # 权限初始化失败不应该阻断整个初始化过程
+        # 权限体系数据已通过数据库SQL文件完成初始化
+        # 不需要额外的权限初始化服务
         
         # TODO: 根据需要添加其他基础数据初始化逻辑
         # async with DatabaseSession.get_session_context() as session:

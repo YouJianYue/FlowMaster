@@ -110,7 +110,7 @@ async def get_user_info():
     """
     获取当前用户信息 - 🚨 关键修改：返回用户权限数据
     解决菜单管理页面操作列不显示的问题
-    
+
     Returns:
         ApiResponse[UserInfoResp]: 用户信息（包含权限列表）
     """
@@ -118,16 +118,16 @@ async def get_user_info():
     user_context = UserContextHolder.get_context()
     if not user_context:
         raise HTTPException(status_code=401, detail="用户未登录")
-    
+
     try:
-        # 导入权限服务 - 解决操作列显示问题的核心
-        from apps.system.core.service.impl.permission_service_impl import PermissionServiceImpl
-        permission_service = PermissionServiceImpl()
-        
+        # 导入角色服务 - 解决操作列显示问题的核心
+        from apps.system.core.service.role_service import get_role_service
+        role_service = get_role_service()
+
         # 获取用户权限和角色
-        permissions = await permission_service.get_user_permissions(user_context.id)
-        user_roles = await permission_service.get_user_roles(user_context.id)
-        
+        permissions = await role_service.list_permissions_by_user_id(user_context.id)
+        role_codes = await role_service.get_role_codes_by_user_id(user_context.id)
+
         # 构建用户信息响应 - 使用Pydantic模型自动处理字段转换
         user_info = UserInfoResp(
             id=user_context.id,
@@ -138,40 +138,32 @@ async def get_user_info():
             phone=user_context.phone or "",
             avatar=user_context.avatar or "",
             dept_name="",  # 后续从部门关联获取
-            roles=user_roles,
+            roles=list(role_codes),
             permissions=list(permissions)  # 🚨 关键修改：返回用户权限列表
         )
-        
+
         return create_success_response(data=user_info)
-        
+
     except Exception as e:
         print(f"权限查询失败，返回基础用户信息: {e}")
-        
-        # 如果权限查询失败，返回基础用户信息（超级管理员给予默认权限）
-        fallback_permissions = []
-        fallback_roles = []
-        
+
+        # 如果权限查询失败，返回基础用户信息（超级管理员给予所有权限）
         if user_context.id == 1:
-            # 🚨 超级管理员默认权限 - 确保菜单和用户管理操作列显示
+            # 超级管理员给予所有基础权限
             fallback_permissions = [
-                # 菜单管理权限
-                "system:menu:list", "system:menu:create", "system:menu:update", "system:menu:delete",
-                # 用户管理权限  
-                "system:user:list", "system:user:create", "system:user:update", "system:user:delete",
-                "system:user:import", "system:user:export", "system:user:reset-pwd",
-                # 角色管理权限
-                "system:role:list", "system:role:create", "system:role:update", "system:role:delete",
-                # 部门管理权限
-                "system:dept:list", "system:dept:create", "system:dept:update", "system:dept:delete"
+                "system:user:list", "system:user:create", "system:user:update", "system:user:delete", "system:user:export", "system:user:import", "system:user:resetPwd", "system:user:updateRole",
+                "system:role:list", "system:role:create", "system:role:update", "system:role:delete", "system:role:updatePermission", "system:role:assign", "system:role:unassign",
+                "system:menu:list", "system:menu:create", "system:menu:update", "system:menu:delete", "system:menu:clearCache",
+                "system:dept:list", "system:dept:create", "system:dept:update", "system:dept:delete", "system:dept:export",
+                "system:notice:list", "system:notice:create", "system:notice:update", "system:notice:delete",
+                "system:file:list", "system:file:upload", "system:file:update", "system:file:delete", "system:file:download"
             ]
-            fallback_roles = ["super_admin"]
+            fallback_role_codes = ["super_admin"]
         else:
             # 普通用户基础权限
-            fallback_permissions = [
-                "system:menu:list", "system:user:list"
-            ]
-            fallback_roles = ["user"]
-        
+            fallback_permissions = ["system:user:list", "system:role:list", "system:menu:list", "system:dept:list"]
+            fallback_role_codes = ["user"]
+
         user_info = UserInfoResp(
             id=user_context.id,
             username=user_context.username,
@@ -181,10 +173,10 @@ async def get_user_info():
             phone=user_context.phone or "",
             avatar=user_context.avatar or "",
             dept_name="",
-            roles=fallback_roles,
+            roles=fallback_role_codes,
             permissions=fallback_permissions  # 🚨 关键修复：确保返回权限
         )
-        
+
         return create_success_response(data=user_info)
 
 

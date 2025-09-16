@@ -219,10 +219,10 @@ class AuthService:
     async def build_user_route_tree(self, user_id: int) -> List[Dict[str, Any]]:
         """
         构建用户路由树（完全对应参考项目的buildRouteTree方法）
-        
+
         Args:
             user_id: 用户ID
-            
+
         Returns:
             List[Dict[str, Any]]: 用户路由树
         """
@@ -231,7 +231,7 @@ class AuthService:
             route_tree = await self.menu_service.get_user_route_tree(user_id)
             # 转换为前端路由格式
             return self.menu_service.convert_to_route_format(route_tree)
-        
+
         # 如果没有菜单服务，返回默认路由树
         return [
             {

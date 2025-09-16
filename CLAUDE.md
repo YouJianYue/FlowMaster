@@ -800,8 +800,12 @@ curl -X GET "http://localhost:8000/user/message/notice/unread/POPUP" \
 ### **3. 禁止的行为** ❌
 - ❌ **禁止编造方法**: 不允许自己想象或编造不存在的业务方法
 - ❌ **禁止创建多版本**: 不允许创建multiple版本的同一个类 (如Simple, Standalone等)
-- ❌ **禁止绕过ORM**: 必须使用SQLAlchemy ORM，不允许用原生SQL绕过
+- ❌ **禁止使用原生SQL**: 严禁在业务代码中使用原生SQL，必须100%使用SQLAlchemy ORM
+- ❌ **禁止MyBatis思维**: 不允许把Java MyBatis的SQL查询方式带入Python项目
+- ❌ **禁止绕过ORM**: 所有数据库操作必须通过SQLAlchemy ORM实现
 - ❌ **禁止随意删除**: 不允许随意删除参考项目中存在的字段或关系
+- ❌ **禁止自创初始化服务**: 不允许创建与参考项目不同的数据初始化方案
+- ❌ **禁止另辟蹊径**: 必须严格按照参考项目的实现方式，不允许自己想当然的创造新方法
 
 ### **4. 正确的开发流程** ✅
 1. **阅读参考项目代码** - 完整理解要实现的功能
@@ -810,11 +814,46 @@ curl -X GET "http://localhost:8000/user/message/notice/unread/POPUP" \
 4. **测试验证** - 确保移植后的功能与参考项目一致
 5. **修复问题** - 针对具体问题进行精确修复，不做大范围改动
 
-### **5. SQLAlchemy关系映射要求** 🔗
-- **必须使用relationship**: 不允许注释掉或删除实体间的关系映射
-- **解决循环引用**: 使用正确的TYPE_CHECKING和字符串引用解决循环导入
-- **保持完整性**: 确保双向关系的back_populates设置正确
+### **5. SQLAlchemy ORM强制要求** 🔗 ✅ **已全面实施**
+- **100% ORM实现**: 所有数据库操作必须使用SQLAlchemy ORM，严禁原生SQL ✅
+- **禁止text()函数**: 不允许使用sqlalchemy.text()执行原生SQL语句 ✅ **已清除**
+- **必须使用Session**: 所有查询通过session.query()或session.execute()实现 ✅
+- **正确的查询方式**:
+  ```python
+  # ✅ 正确 - 使用ORM查询
+  stmt = select(DeptEntity).where(DeptEntity.status == 1)
+  result = await session.execute(stmt)
+  departments = result.scalars().all()
+
+  # ❌ 错误 - 使用原生SQL (已全面清除)
+  result = session.execute(text("SELECT * FROM sys_dept WHERE status = 1"))
+  ```
+- **关系映射优先**: 使用relationship进行表关联，不用JOIN语句
 - **参考标准实现**: 参考SQLAlchemy官方文档和最佳实践
+- **✅ 2025-09-16 状态**: 业务代码中的原生SQL已全面清除，100%使用ORM实现
+
+### **6. 数据初始化方式严格要求** 🔥🔥🔥 ✅ **关键架构调整**
+- **严禁自创初始化方式**: 不允许创建自定义的权限初始化服务或数据初始化逻辑 ❌
+- **必须使用参考项目SQL**: 所有基础数据初始化必须使用参考项目的SQL文件 ✅
+  - 参考文件: `refrence/continew-admin/continew-server/src/main/resources/db/changelog/mysql/main_data.sql`
+  - 通过`DatabaseInitService`执行参考项目SQL文件进行数据初始化
+- **禁止另辟蹊径**: 不允许创建与参考项目不同的初始化方案 ❌
+- **实现方式要求**:
+  ```python
+  # ✅ 正确 - 使用参考项目的SQL初始化方式
+  from apps.common.config.database.database_init_service import DatabaseInitService
+  db_init_service = DatabaseInitService()
+  success = await db_init_service.init_database()
+
+  # ❌ 错误 - 自创权限初始化服务 (已移除)
+  from apps.system.core.service.permission_init_service import permission_init_service
+  await permission_init_service.init_permissions()  # 禁止！
+  ```
+- **关键原则**: "参考项目是如何实现的，而不是另辟新径"
+- **✅ 2025-09-16 状态**:
+  - 自定义权限初始化服务已完全移除 ✅
+  - 所有数据初始化依赖参考项目SQL文件 ✅
+  - 应用启动流程完全按照参考项目模式 ✅
 
 ## 📚 参考项目代码位置参考 (2025-09-13 整理)
 
@@ -1290,8 +1329,15 @@ continew-system 是核心系统业务模块，包含用户管理、角色管理�
    - 使用ORM查询替代原生SQL，提升代码安全性
    - 解决循环引用问题，为后续完善关系映射奠定基础
 
+5. **🔥 原生SQL全面清除** 🔒 ✅ **新增**
+   - **检测清除**: 彻底清除业务代码中的所有`session.execute(text())`原生SQL调用
+   - **ORM转换**: 部门状态更新等关键功能从原生SQL改为SQLAlchemy ORM实现
+   - **代码规范**: 严格执行100% ORM实现，禁止任何原生SQL绕过
+   - **质量保障**: 确保所有数据库操作都通过类型安全的ORM接口
+   - **🔧 2025-09-16 修复**: 修复了在清除原生SQL过程中引入的导入问题和时间格式化问题
+
 #### 📊 技术成果:
-- **ORM架构完善**: 所有模块使用SQLAlchemy ORM，不再使用原生SQL
+- **ORM架构完善**: 所有模块使用SQLAlchemy ORM，不再使用原生SQL ✅ **强化**
 - **字段格式统一**: 响应格式完全匹配参考项目（ID字符串、camelCase等）
 - **数据驱动**: 完全基于数据库真实数据，移除所有模拟数据
 - **接口完整**: 部门、菜单、用户三大模块CRUD功能完整可用

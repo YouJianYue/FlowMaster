@@ -133,11 +133,14 @@ class FlowMasterLogger:
         # SQLAlchemy 日志
         logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
         logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
-        
+
+        # aiosqlite 日志 - 关闭DEBUG输出
+        logging.getLogger('aiosqlite').setLevel(logging.WARNING)
+
         # FastAPI/Uvicorn 日志
         logging.getLogger('uvicorn.access').setLevel(logging.INFO)
         logging.getLogger('uvicorn.error').setLevel(logging.INFO)
-        
+
         # HTTP 客户端日志
         logging.getLogger('httpx').setLevel(logging.WARNING)
         logging.getLogger('asyncio').setLevel(logging.WARNING)

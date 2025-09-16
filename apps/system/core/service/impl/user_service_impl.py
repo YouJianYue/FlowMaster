@@ -146,11 +146,11 @@ class UserServiceImpl(UserService):
             id=str(entity.id),
             username=entity.username,
             nickname=entity.nickname,
-            gender=entity.gender if isinstance(entity.gender, int) else (entity.gender.value if entity.gender else None),
+            gender=entity.gender,  # 数据库中直接是int类型，无需.value
             avatar=entity.avatar,
             email=entity.email,
             phone=entity.phone,
-            status=entity.status if isinstance(entity.status, int) else (entity.status.value if entity.status else 1),
+            status=entity.status,  # 数据库中直接是int类型，无需.value
             is_system=entity.is_system,
             description=entity.description,
             dept_id=str(entity.dept_id) if entity.dept_id else None,

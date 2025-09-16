@@ -8,8 +8,11 @@
 
 from fastapi import APIRouter, Query, Path, Depends, HTTPException, Body
 from typing import List, Optional, Union
+from datetime import datetime
+from sqlalchemy import select
 
 from apps.common.models.api_response import ApiResponse, create_success_response
+from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.service.dept_service import DeptService
 from apps.system.core.service.impl.dept_service_impl import DeptServiceImpl
 from apps.system.core.model.resp.dept_resp import DeptResp
@@ -18,6 +21,7 @@ from apps.system.core.model.resp.dept_resp_exact import DeptRespExact
 from apps.system.core.model.req.dept_req import DeptCreateReq, DeptUpdateReq
 from apps.system.core.model.req.dept_batch_delete_req import DeptBatchDeleteReq
 from apps.common.models.req.common_status_update_req import CommonStatusUpdateReq
+from apps.system.core.model.entity.dept_entity import DeptEntity
 
 
 router = APIRouter(prefix="/system/dept", tags=["部门管理"])
@@ -53,35 +57,27 @@ async def get_dept_detail(
     根据部门ID查询部门的详细信息。
     """
     try:
-        # 直接从数据库查询，避免服务层转换
-        from sqlalchemy import text
-        from apps.common.config.database.database_session import DatabaseSession
-
+        # 使用ORM查询，符合规范
         async with DatabaseSession.get_session_context() as session:
-            sql = """
-                SELECT id, name, parent_id, description, sort, status, is_system,
-                       create_time, update_time
-                FROM sys_dept
-                WHERE id = :dept_id
-            """
+            # 使用ORM查询而不是原生SQL
+            stmt = select(DeptEntity).where(DeptEntity.id == int(dept_id))
+            result = await session.execute(stmt)
+            dept = result.scalar_one_or_none()
 
-            result = await session.execute(text(sql), {"dept_id": int(dept_id)})
-            row = result.fetchone()
-
-            if not row:
+            if not dept:
                 raise HTTPException(status_code=404, detail=f"部门不存在: {dept_id}")
 
-            # 直接构造匹配参考项目的响应
+            # 构造匹配参考项目的响应
             dept_resp = DeptRespExact.from_database_row(
-                id=row[0],
-                name=row[1],
-                parent_id=row[2],
-                description=row[3],
-                sort=row[4],
-                status=row[5],
-                is_system=bool(row[6]),
-                create_time=row[7],
-                update_time=row[8]
+                id=dept.id,
+                name=dept.name,
+                parent_id=dept.parent_id,
+                description=dept.description,
+                sort=dept.sort,
+                status=dept.status,
+                is_system=dept.is_system,
+                create_time=dept.create_time.strftime("%Y-%m-%d %H:%M:%S") if dept.create_time else None,
+                update_time=dept.update_time.strftime("%Y-%m-%d %H:%M:%S") if dept.update_time else None
             )
 
             return create_success_response(data=dept_resp)
@@ -153,44 +149,25 @@ async def update_dept_status(
     根据部门ID修改部门状态。
     """
     try:
-        # 直接执行状态更新
-        from sqlalchemy import text
-        from apps.common.config.database.database_session import DatabaseSession
-        from datetime import datetime
-
+        # 使用ORM执行状态更新
         async with DatabaseSession.get_session_context() as session:
-            # 检查部门是否存在
-            check_sql = "SELECT name, is_system FROM sys_dept WHERE id = :dept_id"
-            result = await session.execute(text(check_sql), {"dept_id": int(dept_id)})
-            row = result.fetchone()
+            # 使用ORM查询部门信息
+            stmt = select(DeptEntity).where(DeptEntity.id == int(dept_id))
+            result = await session.execute(stmt)
+            dept = result.scalar_one_or_none()
 
-            if not row:
+            if not dept:
                 raise HTTPException(status_code=404, detail=f"部门不存在: {dept_id}")
 
-            dept_name = row[0]
-            is_system = bool(row[1])
-
             # 检查系统内置部门是否可以禁用
-            if is_system and status_req.status == 2:  # 2=禁用
-                raise HTTPException(status_code=400, detail=f"[{dept_name}] 是系统内置部门，不允许禁用")
+            if dept.is_system and status_req.status == 2:  # 2=禁用
+                raise HTTPException(status_code=400, detail=f"[{dept.name}] 是系统内置部门，不允许禁用")
 
-            # 执行状态更新
-            update_sql = """
-                UPDATE sys_dept
-                SET status = :status,
-                    update_user = :update_user,
-                    update_time = :update_time
-                WHERE id = :dept_id
-            """
+            # 使用ORM更新部门状态
+            dept.status = status_req.status
+            dept.update_user = 1  # TODO: 从上下文获取当前用户ID
+            dept.update_time = datetime.now()
 
-            params = {
-                "dept_id": int(dept_id),
-                "status": status_req.status,
-                "update_user": 1,  # TODO: 从上下文获取当前用户ID
-                "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-
-            await session.execute(text(update_sql), params)
             await session.commit()
 
             status_text = "启用" if status_req.status == 1 else "禁用"

@@ -108,8 +108,17 @@ class JWTUtils:
         exp = payload.get("exp")
         if exp is None or datetime.now(UTC) > datetime.fromtimestamp(exp, UTC):
             return None
-        
+
         return payload
+
+    def get_current_timestamp(self) -> int:
+        """
+        获取当前时间戳（毫秒）
+
+        Returns:
+            int: 当前时间戳（毫秒）
+        """
+        return int(datetime.now().timestamp() * 1000)
 
 
 # 全局实例

@@ -44,9 +44,8 @@ class AbstractLoginHandler(ABC):
         """
         登录前置处理
         """
-        # 🚨 临时禁用验证码校验，方便测试权限系统
-        print("🔧 [测试模式] 跳过验证码校验")
-        # await AbstractLoginHandler._validate_captcha(request)
+        # 启用验证码校验 - 完全复刻参考项目
+        await AbstractLoginHandler._validate_captcha(request)
 
     @staticmethod
     async def post_login(user_context: UserContext, _login_resp: LoginResp, extra_info: Dict[str, Any]):
@@ -150,22 +149,22 @@ class AbstractLoginHandler(ABC):
         # 导入验证码缓存（避免循环导入）
         from apps.common.controller.captcha_controller import captcha_cache
         from datetime import datetime
-        
+
         # 只对账号登录进行验证码校验（参考项目中的逻辑）
         from apps.system.auth.model.req.login_req import AccountLoginReq
         if not isinstance(request, AccountLoginReq):
             return
-            
+
         # 如果没有提供验证码信息，则跳过验证（兼容某些客户端）
         if not hasattr(request, 'uuid') or not request.uuid:
             return
-            
+
         if not hasattr(request, 'captcha') or not request.captcha:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="请输入验证码"
             )
-            
+
         # 清理过期验证码
         current_time = datetime.now()
         expired_keys = [
@@ -174,25 +173,28 @@ class AbstractLoginHandler(ABC):
         ]
         for key in expired_keys:
             del captcha_cache[key]
-            
+
+        # 构造验证码缓存键（与验证码生成时的格式保持一致）
+        captcha_key = f"captcha:{request.uuid}"
+
         # 检查验证码UUID是否存在
-        if request.uuid not in captcha_cache:
+        if captcha_key not in captcha_cache:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="验证码已过期或不存在，请重新获取"
             )
-            
-        cached_data = captcha_cache[request.uuid]
-        
+
+        cached_data = captcha_cache[captcha_key]
+
         # 验证验证码（忽略大小写）
         if request.captcha.lower() != cached_data['code']:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="验证码错误，请重新输入"
             )
-            
+
         # 验证成功，删除验证码（一次性使用）
-        del captcha_cache[request.uuid]
+        del captcha_cache[captcha_key]
 
     @staticmethod
     async def _log_login_success(_user_context: UserContext, _extra_info: Dict[str, Any]):

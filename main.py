@@ -21,6 +21,11 @@ from apps.system.core.controller.dashboard_controller import router as dashboard
 from apps.system.core.controller.dept_controller import router as dept_router
 from apps.system.core.controller.user_controller import router as user_router
 from apps.system.core.controller.menu_controller import router as menu_router
+from apps.system.core.controller.role_controller import router as role_router
+from apps.system.core.controller.common_controller import router as system_common_router
+
+# 导入WebSocket路由 (修复循环导入问题后重新启用)
+from apps.common.websocket.websocket_controller import websocket_router, api_router as websocket_api_router
 
 # 导入中间件
 from apps.common.middleware.jwt_auth_middleware import JWTAuthMiddleware
@@ -85,6 +90,7 @@ async def lifespan(app: FastAPI):
 
             if success:
                 logger.info("✅ 基础数据初始化完成")
+                logger.info("🔐 权限体系数据已通过SQL文件初始化")
             else:
                 logger.warning("⚠️ 基础数据初始化失败")
         except Exception as init_error:
@@ -159,7 +165,7 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(auth_router)           # 认证路由
-app.include_router(captcha_router)        # 验证码路由  
+app.include_router(captcha_router)        # 验证码路由
 app.include_router(common_router)         # 系统公共路由
 app.include_router(tenant_router)         # 租户管理路由
 app.include_router(user_message_router)   # 用户消息路由
@@ -167,6 +173,12 @@ app.include_router(dashboard_router)      # 仪表盘路由
 app.include_router(dept_router)           # 部门管理路由
 app.include_router(user_router)           # 用户管理路由
 app.include_router(menu_router)           # 菜单管理路由
+app.include_router(role_router)           # 角色管理路由
+app.include_router(system_common_router)  # 系统通用路由
+
+# 注册WebSocket路由 (修复循环导入问题后重新启用)
+app.include_router(websocket_router)      # WebSocket连接路由
+app.include_router(websocket_api_router)  # WebSocket API路由
 
 # 健康检查（增强版）
 @app.get("/health", summary="健康检查")

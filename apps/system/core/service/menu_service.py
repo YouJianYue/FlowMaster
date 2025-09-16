@@ -187,6 +187,58 @@ class MenuService:
         
         return routes
 
+    async def get_permission_tree(self) -> List[Dict[str, Any]]:
+        """
+        获取权限树 - 用于角色权限分配
+
+        Returns:
+            List[Dict[str, Any]]: 权限树列表
+        """
+        # 获取所有菜单数据
+        all_menus = await self.list_all_menus()
+
+        # 构建权限树（包含所有菜单和按钮）
+        permission_tree = []
+
+        def build_tree_node(menu):
+            return {
+                "id": menu.get("id"),
+                "parentId": menu.get("parent_id", 0),
+                "title": menu.get("title"),
+                "type": menu.get("type"),
+                "permission": menu.get("permission", ""),
+                "sort": menu.get("sort", 999),
+                "children": []
+            }
+
+        # 创建节点映射
+        node_map = {}
+        root_nodes = []
+
+        # 首先创建所有节点
+        for menu in all_menus:
+            node = build_tree_node(menu)
+            node_map[menu["id"]] = node
+
+            if menu.get("parent_id", 0) == 0:
+                root_nodes.append(node)
+
+        # 然后建立父子关系
+        for menu in all_menus:
+            parent_id = menu.get("parent_id", 0)
+            if parent_id != 0 and parent_id in node_map:
+                node_map[parent_id]["children"].append(node_map[menu["id"]])
+
+        # 按排序号排序
+        def sort_tree(nodes):
+            nodes.sort(key=lambda x: x["sort"])
+            for node in nodes:
+                if node["children"]:
+                    sort_tree(node["children"])
+
+        sort_tree(root_nodes)
+        return root_nodes
+
 
 # 依赖注入函数
 def get_menu_service(db_session: Optional[Session] = None) -> MenuService:
