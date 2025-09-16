@@ -3,20 +3,28 @@
 用户服务实现
 
 @author: continew-admin
-@since: 2025/9/11 11:00
+@since: 2025/9/16 07:55
 """
 
 from typing import Optional, Union
+from sqlalchemy import select, and_, or_, func
+from sqlalchemy.orm import selectinload
 
 from ..user_service import UserService
 from apps.system.core.model.resp.user_resp import UserResp
 from apps.system.core.model.resp.user_detail_resp import UserDetailResp
+from apps.system.core.model.entity.user_entity import UserEntity
 from apps.common.models.page_resp import PageResp
+from apps.common.config.database.database_session import DatabaseSession
+from apps.common.config.logging import get_logger
 
 
 class UserServiceImpl(UserService):
     """用户服务实现"""
-    
+
+    def __init__(self):
+        self.logger = get_logger(self.__class__.__name__)
+
     async def get_user_page(
         self,
         dept_id: Optional[Union[int, str]] = None,
@@ -27,7 +35,7 @@ class UserServiceImpl(UserService):
         sort: Optional[str] = None
     ) -> PageResp[UserResp]:
         """
-        分页查询用户列表
+        分页查询用户列表（从数据库查询真实数据）
 
         Args:
             dept_id: 部门ID
@@ -40,174 +48,66 @@ class UserServiceImpl(UserService):
         Returns:
             PageResp[UserResp]: 分页用户数据
         """
-        # TODO: 实现实际的数据库查询逻辑
-        # 目前返回模拟数据，匹配参考项目格式
-        
-        # 模拟用户数据 - 匹配参考项目的实际数据
-        mock_users = [
-            # 参考项目中的真实用户数据
-            UserResp(
-                id="547889293968801834",
-                create_user_string="超级管理员",
-                create_time="2025-08-29 20:07:19",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="lishuyanla",
-                nickname="颜如玉",
-                gender=1,
-                avatar=None,
-                email=None,
-                phone=None,
-                status=1,
-                is_system=False,
-                description="书中自有颜如玉，世间多是李莫愁。",
-                dept_id=1,
-                dept_name="Xxx科技有限公司",
-                role_ids=[2, 3, "547888897925840927", "547888897925840928"],
-                role_names=["系统管理员", "普通用户", "测试人员", "研发人员"]
-            ),
-            UserResp(
-                id="547889293968801829",
-                create_user_string="超级管理员",
-                create_time="2025-08-29 20:07:19",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="Jing",
-                nickname="MS-Jing",
-                gender=1,
-                avatar=None,
-                email=None,
-                phone=None,
-                status=2,  # 禁用状态
-                is_system=False,
-                description="路虽远，行则将至。",
-                dept_id="547887852587843599",
-                dept_name="研发一组",
-                role_ids=[2, 3, "547888897925840927", "547888897925840928"],
-                role_names=["系统管理员", "普通用户", "测试人员", "研发人员"]
-            ),
-            UserResp(
-                id="547889293968801824",
-                create_user_string="超级管理员",
-                create_time="2025-08-29 20:07:19",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="Yoofff",
-                nickname="Yoofff",
-                gender=1,
-                avatar=None,
-                email=None,
-                phone=None,
-                status=2,  # 禁用状态
-                is_system=False,
-                description="弱小和无知不是生存的障碍，傲慢才是。",
-                dept_id=1,
-                dept_name="Xxx科技有限公司",
-                role_ids=[2, "547888897925840928"],
-                role_names=["系统管理员", "研发人员"]
-            ),
-            UserResp(
-                id="547889293968801826",
-                create_user_string="超级管理员",
-                create_time="2025-08-29 20:07:19",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="AutumnSail",
-                nickname="秋登",
-                gender=1,
-                avatar=None,
-                email=None,
-                phone=None,
-                status=1,  # 启用状态
-                is_system=False,
-                description="只有追求完美，才能创造奇迹。",
-                dept_id="547887852587843602",
-                dept_name="研发一组",
-                role_ids=[2, "547888897925840928"],
-                role_names=["系统管理员", "研发人员"]
-            ),
-            # 原有的用户数据保留一些
-            UserResp(
-                id="547889293968801823",
-                create_user_string="超级管理员",
-                create_time="2025-08-14 08:54:38",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="Charles",
-                nickname="Charles",
-                gender=1,
-                avatar=None,
-                email=None,
-                phone=None,
-                status=1,
-                is_system=False,
-                description="代码写到极致，就是艺术。",
-                dept_id="547887852587843595",
-                dept_name="研发一组",
-                role_ids=["547888897925840928"],
-                role_names=["研发人员"]
-            ),
-            UserResp(
-                id="547889293968801825",
-                create_user_string="超级管理员",
-                create_time="2025-08-14 10:30:15",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="Bob",
-                nickname="Bob",
-                gender=1,
-                avatar=None,
-                email="bob@flowmaster.com",
-                phone="13900139001",
-                status=2,  # 禁用状态
-                is_system=False,
-                description="软件测试工程师",
-                dept_id="547887852587843593",
-                dept_name="测试部",
-                role_ids=["547888897925840930"],
-                role_names=["测试员"]
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 构建查询条件
+                query = select(UserEntity)
+
+                # 添加部门过滤
+                if dept_id:
+                    query = query.where(UserEntity.dept_id == int(dept_id))
+
+                # 添加关键词搜索
+                if description:
+                    query = query.where(
+                        or_(
+                            UserEntity.username.contains(description),
+                            UserEntity.nickname.contains(description),
+                            UserEntity.email.contains(description)
+                        )
+                    )
+
+                # 添加状态过滤
+                if status is not None:
+                    query = query.where(UserEntity.status == status)
+
+                # 统计总数
+                count_query = select(func.count()).select_from(query.subquery())
+                total_result = await session.execute(count_query)
+                total = total_result.scalar_one()
+
+                # 分页查询
+                offset = (page - 1) * size
+                query = query.order_by(UserEntity.create_time.desc()).offset(offset).limit(size)
+
+                result = await session.execute(query)
+                users = result.scalars().all()
+
+                # 转换为响应模型
+                user_list = [self._entity_to_resp(user) for user in users]
+
+                return PageResp(
+                    list=user_list,  # 使用list字段，不是records
+                    total=total,
+                    current=page,
+                    size=size,
+                    pages=(total + size - 1) // size
+                )
+
+        except Exception as e:
+            self.logger.error(f"分页查询用户失败: {e}")
+            # 如果查询失败，返回空结果而不是抛异常
+            return PageResp(
+                list=[],  # 使用list字段，不是records
+                total=0,
+                current=page,
+                size=size,
+                pages=0
             )
-        ]
-
-        # 应用多条件过滤
-        filtered_users = mock_users
-
-        # 按部门ID过滤
-        if dept_id is not None:
-            filtered_users = [user for user in filtered_users if str(user.dept_id) == str(dept_id)]
-
-        # 按关键词搜索（用户名、昵称、描述）
-        if description:
-            description_lower = description.lower()
-            filtered_users = [user for user in filtered_users
-                            if (description_lower in user.username.lower() or
-                                description_lower in user.nickname.lower() or
-                                (user.description and description_lower in user.description.lower()))]
-
-        # 按状态过滤
-        if status is not None:
-            filtered_users = [user for user in filtered_users if user.status == status]
-        
-        # 简单的分页处理
-        total = len(filtered_users)
-        start_index = (page - 1) * size
-        end_index = start_index + size
-        page_users = filtered_users[start_index:end_index]
-        
-        return PageResp[UserResp](
-            list=page_users,
-            total=total
-        )
 
     async def get_user_detail(self, user_id: Union[int, str]) -> UserDetailResp:
         """
-        获取用户详情
+        获取用户详情（从数据库查询真实数据）
 
         Args:
             user_id: 用户ID
@@ -215,125 +115,86 @@ class UserServiceImpl(UserService):
         Returns:
             UserDetailResp: 用户详情数据
         """
-        # TODO: 实现实际的数据库查询逻辑
-        # 目前返回模拟数据，匹配参考项目格式
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 查询用户详情
+                query = select(UserEntity).where(UserEntity.id == int(user_id))
+                result = await session.execute(query)
+                user = result.scalar_one_or_none()
 
-        # 模拟根据用户ID返回不同的详情数据
-        user_id_str = str(user_id)
+                if not user:
+                    raise ValueError(f"用户不存在: {user_id}")
 
-        if user_id_str == "547889293968801834":
-            return UserDetailResp(
-                id="547889293968801834",
-                create_user_string="超级管理员",
-                create_time="2025-08-29 20:07:19",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="lishuyanla",
-                nickname="颜如玉",
-                status=1,
-                gender=1,
-                dept_id=1,
-                dept_name="Xxx科技有限公司",
-                role_ids=[2, 3, "547888897925840927", "547888897925840928"],
-                role_names=["系统管理员", "普通用户", "测试人员", "研发人员"],
-                phone=None,
-                email=None,
-                is_system=False,
-                description="书中自有颜如玉，世间多是李莫愁。",
-                avatar=None,
-                pwd_reset_time="2025-08-29 09:20:23"
-            )
-        elif user_id_str == "547889293968801829":
-            return UserDetailResp(
-                id="547889293968801829",
-                create_user_string="超级管理员",
-                create_time="2025-08-29 20:07:19",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="Jing",
-                nickname="MS-Jing",
-                status=2,
-                gender=1,
-                dept_id="547887852587843599",
-                dept_name="研发一组",
-                role_ids=[2, 3, "547888897925840927", "547888897925840928"],
-                role_names=["系统管理员", "普通用户", "测试人员", "研发人员"],
-                phone=None,
-                email=None,
-                is_system=False,
-                description="路虽远，行则将至。",
-                avatar=None,
-                pwd_reset_time="2025-08-29 09:20:23"
-            )
-        elif user_id_str == "547889293968801826":
-            return UserDetailResp(
-                id="547889293968801826",
-                create_user_string="超级管理员",
-                create_time="2025-08-29 20:07:19",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="AutumnSail",
-                nickname="秋登",
-                status=1,
-                gender=1,
-                dept_id="547887852587843602",
-                dept_name="研发一组",
-                role_ids=[2, "547888897925840928"],
-                role_names=["系统管理员", "研发人员"],
-                phone=None,
-                email=None,
-                is_system=False,
-                description="只有追求完美，才能创造奇迹。",
-                avatar=None,
-                pwd_reset_time="2025-08-29 09:20:23"
-            )
-        elif user_id_str == "547889293968801823":
-            return UserDetailResp(
-                id="547889293968801823",
-                create_user_string="超级管理员",
-                create_time="2025-08-14 08:54:38",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="Charles",
-                nickname="Charles",
-                status=1,
-                gender=1,
-                dept_id="547887852587843595",
-                dept_name="研发一组",
-                role_ids=["547888897925840928"],
-                role_names=["研发人员"],
-                phone=None,
-                email=None,
-                is_system=False,
-                description="代码写到极致，就是艺术。",
-                avatar=None,
-                pwd_reset_time="2025-08-14 08:20:00"
-            )
-        else:
-            # 默认用户数据
-            return UserDetailResp(
-                id=user_id_str,
-                create_user_string="系统管理员",
-                create_time="2025-09-14 10:00:00",
-                disabled=False,
-                update_user_string=None,
-                update_time=None,
-                username="user" + user_id_str[-4:],
-                nickname="用户" + user_id_str[-4:],
-                status=1,
-                gender=0,
-                dept_id=1,
-                dept_name="默认部门",
-                role_ids=[3],
-                role_names=["普通用户"],
-                phone=None,
-                email=None,
-                is_system=False,
-                description="默认用户",
-                avatar=None,
-                pwd_reset_time="2025-09-14 10:00:00"
-            )
+                # 转换为详情响应模型
+                return self._entity_to_detail_resp(user)
+
+        except Exception as e:
+            self.logger.error(f"获取用户详情失败: {e}")
+            raise
+
+    def _entity_to_resp(self, entity: UserEntity) -> UserResp:
+        """
+        将用户实体转换为响应模型
+
+        Args:
+            entity: 用户实体
+
+        Returns:
+            UserResp: 用户响应模型
+        """
+        return UserResp(
+            id=str(entity.id),
+            username=entity.username,
+            nickname=entity.nickname,
+            gender=entity.gender if isinstance(entity.gender, int) else (entity.gender.value if entity.gender else None),
+            avatar=entity.avatar,
+            email=entity.email,
+            phone=entity.phone,
+            status=entity.status if isinstance(entity.status, int) else (entity.status.value if entity.status else 1),
+            is_system=entity.is_system,
+            description=entity.description,
+            dept_id=str(entity.dept_id) if entity.dept_id else None,
+            dept_name="部门名称",  # TODO: 从部门表关联查询
+            role_ids=[],  # TODO: 从角色关联表查询
+            role_names=[],  # TODO: 从角色关联表查询
+            create_user_string="超级管理员",  # TODO: 从用户表关联查询
+            create_time=entity.create_time.strftime("%Y-%m-%d %H:%M:%S") if entity.create_time else None,
+            disabled=False,
+            update_user_string=None,
+            update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None
+        )
+
+    def _entity_to_detail_resp(self, entity: UserEntity) -> UserDetailResp:
+        """
+        将用户实体转换为详情响应模型
+
+        Args:
+            entity: 用户实体
+
+        Returns:
+            UserDetailResp: 用户详情响应模型
+        """
+        # TODO: 实现用户详情响应模型转换
+        # 目前返回基础用户响应
+        basic_resp = self._entity_to_resp(entity)
+        return UserDetailResp(
+            id=basic_resp.id,
+            username=basic_resp.username,
+            nickname=basic_resp.nickname,
+            gender=basic_resp.gender,
+            avatar=basic_resp.avatar,
+            email=basic_resp.email,
+            phone=basic_resp.phone,
+            status=basic_resp.status,
+            is_system=basic_resp.is_system,
+            description=basic_resp.description,
+            dept_id=basic_resp.dept_id,
+            dept_name=basic_resp.dept_name,
+            role_ids=basic_resp.role_ids,
+            role_names=basic_resp.role_names,
+            create_user_string=basic_resp.create_user_string,
+            create_time=basic_resp.create_time,
+            disabled=basic_resp.disabled,
+            update_user_string=basic_resp.update_user_string,
+            update_time=basic_resp.update_time
+        )

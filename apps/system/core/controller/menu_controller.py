@@ -5,11 +5,14 @@
 """
 
 import logging
-from typing import List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Dict, Any, Union
+from fastapi import APIRouter, Depends, HTTPException, Body, Path
 from sqlalchemy import select
 from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.system.core.service.impl.menu_service_impl import menu_service
+from apps.system.core.model.req.menu_req import MenuReq, MenuQuery
+from apps.system.core.model.resp.menu_resp import MenuResp
+from apps.common.models.req.common_status_update_req import CommonStatusUpdateReq
 from apps.common.context.user_context_holder import UserContextHolder
 from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.model.entity.menu_entity import MenuEntity
@@ -30,12 +33,12 @@ async def get_menu_tree() -> ApiResponse[List[Dict[str, Any]]]:
         ApiResponse[List[Dict[str, Any]]]: 菜单树数据
     """
     try:
-        # 获取完整菜单树（包含按钮权限）
-        menu_tree = await menu_service.get_menu_tree(only_enabled=True)
-        
+        # 获取完整菜单树（包括禁用的菜单，用于菜单管理页面）
+        menu_tree = await menu_service.get_menu_tree(only_enabled=False)
+
         # 转换为前端格式（camelCase字段）
         frontend_tree = menu_service.convert_to_frontend_format(menu_tree)
-        
+
         return create_success_response(data=frontend_tree)
         
     except Exception as e:
@@ -156,7 +159,130 @@ async def get_menu_detail(menu_id: int) -> ApiResponse[Dict[str, Any]]:
         raise HTTPException(status_code=500, detail=f"获取菜单详情失败: {str(e)}")
 
 
-# TODO: 后续可以添加的CRUD接口
-# @router.post("/", summary="创建菜单")
-# @router.put("/{menu_id}", summary="更新菜单") 
-# @router.delete("/{menu_id}", summary="删除菜单")
+@router.post("", response_model=ApiResponse[MenuResp], summary="创建菜单")
+async def create_menu(menu_req: MenuReq) -> ApiResponse[MenuResp]:
+    """
+    创建菜单（一比一复刻参考项目）
+
+    Args:
+        menu_req: 菜单创建请求参数
+
+    Returns:
+        ApiResponse[MenuResp]: 创建的菜单数据
+    """
+    try:
+        # 调用服务层创建菜单
+        created_menu = await menu_service.create_menu(menu_req)
+        return create_success_response(data=created_menu, message="创建成功")
+
+    except Exception as e:
+        logger.error(f"创建菜单失败: {e}")
+        raise HTTPException(status_code=500, detail=f"创建菜单失败: {str(e)}")
+
+
+@router.put("/{menu_id}", response_model=ApiResponse[MenuResp], summary="更新菜单")
+async def update_menu(
+    menu_id: int = Path(..., description="菜单ID", example=1010),
+    menu_req: MenuReq = ...
+) -> ApiResponse[MenuResp]:
+    """
+    更新菜单（一比一复刻参考项目）
+
+    Args:
+        menu_id: 菜单ID
+        menu_req: 菜单更新请求参数
+
+    Returns:
+        ApiResponse[MenuResp]: 更新的菜单数据
+    """
+    try:
+        # 调用服务层更新菜单
+        updated_menu = await menu_service.update_menu(menu_id, menu_req)
+        return create_success_response(data=updated_menu, message="更新成功")
+
+    except Exception as e:
+        logger.error(f"更新菜单失败: {e}")
+        raise HTTPException(status_code=500, detail=f"更新菜单失败: {str(e)}")
+
+
+@router.put("/{menu_id}/status", response_model=ApiResponse[bool], summary="修改菜单状态")
+async def update_menu_status(
+    menu_id: int = Path(..., description="菜单ID", example=1010),
+    status_req: CommonStatusUpdateReq = ...
+) -> ApiResponse[bool]:
+    """
+    修改菜单状态（启用/禁用）
+
+    Args:
+        menu_id: 菜单ID
+        status_req: 状态更新请求
+
+    Returns:
+        ApiResponse[bool]: 更新结果
+    """
+    try:
+        # 调用服务层更新状态
+        await menu_service.update_menu_status(menu_id, status_req.status)
+        status_text = "启用" if status_req.status == 1 else "禁用"
+        return create_success_response(data=True, message=f"{status_text}成功")
+
+    except Exception as e:
+        logger.error(f"修改菜单状态失败: {e}")
+        raise HTTPException(status_code=500, detail=f"修改菜单状态失败: {str(e)}")
+
+
+@router.delete("", response_model=ApiResponse[bool], summary="批量删除菜单")
+async def batch_delete_menu(ids: List[int] = Body(..., description="菜单ID列表")) -> ApiResponse[bool]:
+    """
+    批量删除菜单（一比一复刻参考项目）
+
+    Args:
+        ids: 菜单ID列表
+
+    Returns:
+        ApiResponse[bool]: 删除结果
+    """
+    try:
+        # 调用服务层批量删除
+        await menu_service.batch_delete_menu(ids)
+        return create_success_response(data=True, message="删除成功")
+
+    except Exception as e:
+        logger.error(f"批量删除菜单失败: {e}")
+        raise HTTPException(status_code=500, detail=f"批量删除菜单失败: {str(e)}")
+
+
+@router.get("/dict/tree", response_model=ApiResponse[List[Dict[str, Any]]], summary="获取菜单字典树")
+async def get_menu_dict_tree() -> ApiResponse[List[Dict[str, Any]]]:
+    """
+    获取菜单字典树（用于下拉选择）
+
+    Returns:
+        ApiResponse[List[Dict[str, Any]]]: 菜单字典树数据
+    """
+    try:
+        # 获取字典树数据
+        dict_tree = await menu_service.get_menu_dict_tree()
+        return create_success_response(data=dict_tree)
+
+    except Exception as e:
+        logger.error(f"获取菜单字典树失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取菜单字典树失败: {str(e)}")
+
+
+@router.delete("/cache", response_model=ApiResponse[bool], summary="清除缓存")
+async def clear_cache() -> ApiResponse[bool]:
+    """
+    清除缓存（一比一复刻参考项目）
+
+    Returns:
+        ApiResponse[bool]: 清除结果
+    """
+    try:
+        # 调用服务层清除缓存
+        await menu_service.clear_cache()
+        return create_success_response(data=True, message="清除缓存成功")
+
+    except Exception as e:
+        logger.error(f"清除缓存失败: {e}")
+        raise HTTPException(status_code=500, detail=f"清除缓存失败: {str(e)}")

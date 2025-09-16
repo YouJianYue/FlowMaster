@@ -319,20 +319,21 @@ class DeptServiceImpl(DeptService):
 
     def _convert_to_dict_tree(self, dept_tree: List[DeptResp]) -> List[dict]:
         """
-        转换为字典树格式
+        转换为字典树格式（匹配前端TreeNodeData格式）
 
         Args:
             dept_tree: 部门树
 
         Returns:
-            List[dict]: 字典树
+            List[dict]: 字典树（使用key/title格式，匹配前端期望）
         """
         result = []
         for dept in dept_tree:
             dict_item = {
-                "value": dept.id,
-                "label": dept.name,
+                "key": dept.id,  # 前端期望key字段
+                "title": dept.name,  # 前端期望title字段
                 "parentId": dept.parent_id,
+                "sort": dept.sort,  # 添加sort字段用于排序
                 "children": self._convert_to_dict_tree(dept.children or [])
             }
             result.append(dict_item)
