@@ -39,14 +39,24 @@ async def list_roles(
     return create_success_response(data=roles)
 
 
-@router.get("/dict", response_model=ApiResponse[List[Dict[str, str]]], summary="获取角色字典列表")
+@router.get("/dict", response_model=ApiResponse[List[Dict[str, Any]]], summary="获取角色字典列表")
 async def get_role_dict():
     """
     获取角色字典列表 - 用于下拉选择等场景
+    返回格式匹配前端期望的格式，value为数值类型，disabled可以为null
     """
     role_service = get_role_service()
     roles = await role_service.list_enabled_roles()
-    role_dict = [{"key": str(role.id), "title": role.name} for role in roles]
+    role_dict = []
+    for role in roles:
+        # 跳过超级管理员角色，普通用户不应该看到
+        if role.code == 'super_admin':
+            continue
+        role_dict.append({
+            "label": role.name,
+            "value": role.id,  # 直接使用整数ID，不转换为字符串
+            "disabled": None  # 明确设置为None，符合API响应格式
+        })
     return create_success_response(data=role_dict)
 
 
@@ -89,7 +99,7 @@ async def get_role_detail(role_id: int):
         "name": role.name,
         "code": role.code,
         "description": role.description,
-        "dataScope": role.data_scope,
+        "dataScope": role.data_scope,  # 现在是字符串，直接返回
         "sort": role.sort,
         "isSystem": role.is_system,
         "createTime": role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,
@@ -110,7 +120,7 @@ async def create_role(role_data: Dict[str, Any]):
         name=role_data.get("name"),
         code=role_data.get("code"),
         description=role_data.get("description", ""),
-        data_scope=role_data.get("dataScope", 1),
+        data_scope=role_data.get("dataScope", "SELF"),  # 传递字符串而不是数值
         status=role_data.get("status", 1),
         sort=role_data.get("sort", 0),
         create_user=current_user_id
@@ -131,7 +141,7 @@ async def update_role(role_id: int, role_data: Dict[str, Any]):
         name=role_data.get("name"),
         code=role_data.get("code"),
         description=role_data.get("description", ""),
-        data_scope=role_data.get("dataScope", 1),
+        data_scope=role_data.get("dataScope"),  # 保持字符串类型
         status=role_data.get("status", 1),
         sort=role_data.get("sort", 0),
         update_user=current_user_id

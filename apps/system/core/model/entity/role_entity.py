@@ -6,6 +6,7 @@
 
 from typing import Optional
 from sqlalchemy import Column, String, Integer, Boolean, Text
+from pydantic import ConfigDict, Field
 # 暂时移除relationship，避免循环引用问题
 from apps.common.base.model.entity.base_entity import BaseEntity
 from apps.common.enums.data_scope_enum import DataScopeEnum
@@ -27,8 +28,8 @@ class RoleEntity(BaseEntity):
     # 角色编码（唯一）
     code: str = Column(String(32), nullable=False, unique=True, comment="角色编码")
     
-    # 数据权限范围
-    data_scope: DataScopeEnum = Column(String(20), nullable=False, default=DataScopeEnum.SELF.value, comment="数据权限范围")
+    # 数据权限范围 - 修改为字符串类型存储，避免序列化问题
+    data_scope: str = Column(String(20), nullable=False, default=DataScopeEnum.SELF.value, comment="数据权限范围")
     
     # 描述
     description: Optional[str] = Column(Text, nullable=True, comment="描述")
@@ -54,9 +55,9 @@ class RoleEntity(BaseEntity):
     # 等基本CRUD功能稳定后，再重新设计关系映射
     # user_roles = relationship("UserRoleEntity", back_populates="role", cascade="all, delete-orphan")
     
-    class Config:
-        """Pydantic配置"""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "id": 1,
                 "name": "超级管理员",
@@ -71,6 +72,7 @@ class RoleEntity(BaseEntity):
                 "update_time": "2025-01-18T10:00:00Z"
             }
         }
+    )
     
     def __repr__(self) -> str:
         return f"<RoleEntity(id={self.id}, name='{self.name}', code='{self.code}', data_scope='{self.data_scope}')>"
@@ -85,12 +87,23 @@ class RoleEntity(BaseEntity):
     
     def has_all_data_permission(self) -> bool:
         """检查是否拥有全部数据权限"""
-        return self.data_scope == DataScopeEnum.ALL
-    
+        return self.data_scope == DataScopeEnum.ALL.value
+
     def get_data_scope_description(self) -> str:
         """获取数据权限范围描述"""
-        if isinstance(self.data_scope, str):
-            # 如果是字符串，转换为枚举
+        try:
+            # data_scope现在是字符串，直接转换为枚举获取描述
             data_scope_enum = DataScopeEnum(self.data_scope)
             return data_scope_enum.description
-        return self.data_scope.description
+        except ValueError:
+            # 如果转换失败，返回默认描述
+            return "未知权限范围"
+
+    def get_data_scope_value_code(self) -> int:
+        """获取数据权限范围对应的数值编码"""
+        try:
+            data_scope_enum = DataScopeEnum(self.data_scope)
+            return data_scope_enum.value_code
+        except ValueError:
+            # 如果转换失败，返回默认值
+            return DataScopeEnum.SELF.value_code

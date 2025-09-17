@@ -282,7 +282,7 @@ class RoleService:
                         "name": role.name,
                         "code": role.code,
                         "description": role.description,
-                        "dataScope": role.data_scope,
+                        "dataScope": role.data_scope,  # 现在是字符串，直接返回
                         "sort": role.sort,
                         "isSystem": role.is_system,
                         "createTime": role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,
@@ -296,7 +296,7 @@ class RoleService:
             self.logger.error(f"分页查询角色列表失败: {str(e)}", exc_info=True)
             return []
 
-    async def create_role(self, name: str, code: str, description: str = "", data_scope: int = 1,
+    async def create_role(self, name: str, code: str, description: str = "", data_scope: str = "SELF",
                          status: int = 1, sort: int = 0, create_user: int = 1) -> bool:
         """
         创建角色
@@ -305,7 +305,7 @@ class RoleService:
             name: 角色名称
             code: 角色编码
             description: 角色描述
-            data_scope: 数据范围
+            data_scope: 数据范围（字符串类型，如"ALL", "SELF"等）
             status: 状态
             sort: 排序
             create_user: 创建用户ID
@@ -346,7 +346,7 @@ class RoleService:
             return False
 
     async def update_role(self, role_id: int, name: str = None, code: str = None,
-                         description: str = None, data_scope: int = None, status: int = None,
+                         description: str = None, data_scope: str = None, status: int = None,
                          sort: int = None, update_user: int = 1) -> bool:
         """
         更新角色
@@ -356,7 +356,7 @@ class RoleService:
             name: 角色名称
             code: 角色编码
             description: 角色描述
-            data_scope: 数据范围
+            data_scope: 数据范围（字符串类型，如"ALL", "SELF"等）
             status: 状态
             sort: 排序
             update_user: 更新用户ID

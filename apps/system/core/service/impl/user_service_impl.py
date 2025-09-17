@@ -127,47 +127,86 @@ class UserServiceImpl(UserService):
                 if not user:
                     raise ValueError(f"用户不存在: {user_id}")
 
+                # 查询用户角色信息（包括角色ID和名称）
+                from apps.system.core.model.entity.role_entity import RoleEntity
+                role_query = (
+                    select(UserRoleEntity.role_id, RoleEntity.name)
+                    .join(RoleEntity, UserRoleEntity.role_id == RoleEntity.id)
+                    .where(UserRoleEntity.user_id == user.id)
+                )
+                role_result = await session.execute(role_query)
+                roles_data = role_result.fetchall()
+
+                # 分别构建角色ID和角色名称列表
+                role_ids = [str(role_data.role_id) for role_data in roles_data]
+                role_names = [role_data.name for role_data in roles_data]
+
+                # 查询部门名称
+                dept_name = "部门名称"  # 默认值
+                if user.dept_id:
+                    from apps.system.core.model.entity.dept_entity import DeptEntity
+                    dept_query = select(DeptEntity.name).where(DeptEntity.id == user.dept_id)
+                    dept_result = await session.execute(dept_query)
+                    dept_name_result = dept_result.scalar_one_or_none()
+                    if dept_name_result:
+                        dept_name = dept_name_result
+
                 # 转换为详情响应模型
-                return self._entity_to_detail_resp(user)
+                return self._entity_to_detail_resp(user, role_ids, role_names, dept_name)
 
         except Exception as e:
             self.logger.error(f"获取用户详情失败: {e}")
             raise
 
-    async def update_user(self, user_id: int, update_req: UserUpdateReq):
+    async def update_user(self, user_id: Union[int, str], update_req: UserUpdateReq):
         """
-        更新用户信息
+        更新用户信息 - 基于参考项目的update逻辑
+
+        Args:
+            user_id: 用户ID
+            update_req: 用户更新请求
         """
-        async with DatabaseSession.get_session_context() as session:
-            # 1. 查询用户
-            user = await session.get(UserEntity, user_id)
-            if not user:
-                raise ValueError(f"用户不存在: {user_id}")
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 1. 查询用户
+                user = await session.get(UserEntity, int(user_id))
+                if not user:
+                    raise ValueError(f"用户不存在: {user_id}")
 
-            # 2. 更新用户基本信息
-            user.nickname = update_req.nickname
-            user.phone = update_req.phone
-            user.email = update_req.email
-            user.gender = update_req.gender
-            user.status = update_req.status
-            user.description = update_req.description
-            user.dept_id = update_req.dept_id
-            
-            # 3. 更新用户角色关联
-            # 3a. 删除旧的角色关联
-            await session.execute(
-                delete(UserRoleEntity).where(UserRoleEntity.user_id == user_id)
-            )
-            
-            # 3b. 添加新的角色关联
-            if update_req.role_ids:
-                for role_id in update_req.role_ids:
-                    user_role = UserRoleEntity(user_id=user_id, role_id=role_id)
-                    session.add(user_role)
-            
-            # 4. 提交事务
-            await session.commit()
+                # 2. 更新用户基本信息（参考Java UserReq字段）
+                if update_req.username:
+                    user.username = update_req.username
+                user.nickname = update_req.nickname
+                user.phone = update_req.phone
+                user.email = update_req.email
+                user.gender = update_req.gender
+                user.status = update_req.status
+                user.description = update_req.description
 
+                # 处理部门ID - 支持字符串和数字类型
+                if update_req.dept_id:
+                    user.dept_id = int(update_req.dept_id) if isinstance(update_req.dept_id,
+                                                                         str) else update_req.dept_id
+
+                # 3. 更新用户角色关联
+                # 3a. 删除旧的角色关联
+                await session.execute(
+                    delete(UserRoleEntity).where(UserRoleEntity.user_id == int(user_id))
+                )
+
+                # 3b. 添加新的角色关联
+                if update_req.role_ids:
+                    for role_id in update_req.role_ids:
+                        # 支持字符串和数字类型的角色ID
+                        role_id_int = int(role_id) if isinstance(role_id, str) else role_id
+                        user_role = UserRoleEntity(user_id=int(user_id), role_id=role_id_int)
+                        session.add(user_role)
+
+                # 4. 提交事务
+                await session.commit()
+                self.logger.info(f"用户更新成功: {user.username} (ID: {user_id})")
+        except Exception as e:
+            print(f"报错：「」{e}")
     def _entity_to_resp(self, entity: UserEntity) -> UserResp:
         """
         将用户实体转换为响应模型
@@ -200,37 +239,36 @@ class UserServiceImpl(UserService):
             update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None
         )
 
-    def _entity_to_detail_resp(self, entity: UserEntity) -> UserDetailResp:
+    def _entity_to_detail_resp(self, entity: UserEntity, role_ids: list[str] = None, role_names: list[str] = None, dept_name: str = "部门名称") -> UserDetailResp:
         """
         将用户实体转换为详情响应模型
-
         Args:
             entity: 用户实体
-
+            role_ids: 角色ID列表
+            role_names: 角色名称列表
+            dept_name: 部门名称
         Returns:
             UserDetailResp: 用户详情响应模型
         """
-        # TODO: 实现用户详情响应模型转换
-        # 目前返回基础用户响应
-        basic_resp = self._entity_to_resp(entity)
         return UserDetailResp(
-            id=basic_resp.id,
-            username=basic_resp.username,
-            nickname=basic_resp.nickname,
-            gender=basic_resp.gender,
-            avatar=basic_resp.avatar,
-            email=basic_resp.email,
-            phone=basic_resp.phone,
-            status=basic_resp.status,
-            is_system=basic_resp.is_system,
-            description=basic_resp.description,
-            dept_id=basic_resp.dept_id,
-            dept_name=basic_resp.dept_name,
-            role_ids=basic_resp.role_ids,
-            role_names=basic_resp.role_names,
-            create_user_string=basic_resp.create_user_string,
-            create_time=basic_resp.create_time,
-            disabled=basic_resp.disabled,
-            update_user_string=basic_resp.update_user_string,
-            update_time=basic_resp.update_time
+            id=str(entity.id),
+            username=entity.username,
+            nickname=entity.nickname,
+            gender=entity.gender,
+            avatar=entity.avatar,
+            email=entity.email,
+            phone=entity.phone,
+            status=entity.status,
+            is_system=entity.is_system,
+            description=entity.description,
+            dept_id=str(entity.dept_id) if entity.dept_id else None,
+            dept_name=dept_name,
+            role_ids=role_ids if role_ids is not None else [],
+            role_names=role_names if role_names is not None else [],
+            create_user_string="超级管理员",  # TODO: 从用户表关联查询
+            create_time=entity.create_time.strftime("%Y-%m-%d %H:%M:%S") if entity.create_time else None,
+            disabled=False,
+            update_user_string=None,
+            update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None,
+            pwd_reset_time=None  # TODO: 如果UserEntity有此字段，则从entity获取
         )

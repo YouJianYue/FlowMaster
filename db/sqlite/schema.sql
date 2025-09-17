@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS sys_role (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     code TEXT NOT NULL,
-    data_scope INTEGER NOT NULL DEFAULT 4, -- 数据权限（1：全部数据权限；2：本部门及以下数据权限；3：本部门数据权限；4：仅本人数据权限；5：自定义数据权限）
+    data_scope TEXT NOT NULL DEFAULT 'SELF', -- 数据权限（ALL：全部数据权限；DEPT_AND_CHILD：本部门及以下数据权限；DEPT：本部门数据权限；SELF：仅本人数据权限；CUSTOM：自定义数据权限）
     description TEXT DEFAULT NULL,
     sort INTEGER NOT NULL DEFAULT 999,
     is_system INTEGER NOT NULL DEFAULT 0, -- 是否为系统内置数据

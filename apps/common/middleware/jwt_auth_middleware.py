@@ -129,7 +129,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     async def _set_user_context(self, payload: Dict[str, Any], request: Request):
         """
         设置用户上下文
-        
+
         Args:
             payload: JWT载荷
             request: 请求对象
@@ -138,15 +138,17 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         username = payload.get("username")
         tenant_id = payload.get("tenant_id", 1)
         client_id = payload.get("client_id")
-        
+
         if not user_id or not username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="令牌格式错误"
             )
-        
-        # TODO: 从数据库获取完整用户信息、权限和角色
-        # 这里暂时使用简化的用户上下文
+
+        # 从数据库获取用户权限和角色信息
+        permissions, role_codes = await self._get_user_permissions_and_roles(user_id)
+
+        # 创建用户上下文
         user_context = UserContext(
             id=user_id,
             username=username,
@@ -158,23 +160,45 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             tenant_id=tenant_id,
             client_type=None,
             client_id=client_id,
-            permissions=set(),  # TODO: 从数据库获取
-            role_codes=set(),   # TODO: 从数据库获取
-            roles=set()         # 修复类型：应该是set，不是list
+            permissions=permissions,  # 从数据库获取的权限
+            role_codes=role_codes,    # 从数据库获取的角色编码
+            roles=set()         # TODO: 可以后续完善角色上下文
         )
-        
+
         # 设置用户上下文
         UserContextHolder.set_context(user_context)
-        
+
         # 设置用户额外信息
-        extra_context = UserExtraContext(
-            ip=NetworkUtils.get_client_ip(request),
-            user_agent=NetworkUtils.get_user_agent(request),
-            request_id=NetworkUtils.get_request_id(request),
-            request_time=None  # TODO: 设置请求时间
-        )
+        extra_context = UserExtraContext(request=request)
         UserContextHolder.set_extra_context(extra_context)
-    
+
+    async def _get_user_permissions_and_roles(self, user_id: int) -> tuple[set[str], set[str]]:
+        """
+        获取用户权限和角色信息
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            tuple[set[str], set[str]]: (权限集合, 角色编码集合)
+        """
+        try:
+            from apps.system.core.service.role_service import get_role_service
+            role_service = get_role_service()
+
+            # 获取用户权限
+            permissions = await role_service.list_permissions_by_user_id(user_id)
+
+            # 获取用户角色编码
+            role_codes = await role_service.get_role_codes_by_user_id(user_id)
+
+            return permissions, role_codes
+
+        except Exception as e:
+            # 如果获取权限失败，记录日志但不抛出异常，返回空权限集合
+            print(f"获取用户权限失败 (user_id: {user_id}): {e}")
+            return set(), set()
+
     def _create_unauthorized_response(self, detail: str) -> JSONResponse:
         """
         创建401未授权响应
