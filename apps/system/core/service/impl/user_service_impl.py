@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 用户服务实现
-
-@author: continew-admin
-@since: 2025/9/16 07:55
 """
 
 from typing import Optional, Union
-from sqlalchemy import select, and_, or_, func, delete
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, or_, func, delete
 
 from ..user_service import UserService
 from apps.system.core.model.req.user_req import UserUpdateReq
+from apps.system.core.model.req.user_role_update_req import UserRoleUpdateReq
 from apps.system.core.model.resp.user_resp import UserResp
 from apps.system.core.model.resp.user_detail_resp import UserDetailResp
 from apps.system.core.model.entity.user_entity import UserEntity
@@ -28,13 +25,13 @@ class UserServiceImpl(UserService):
         self.logger = get_logger(self.__class__.__name__)
 
     async def get_user_page(
-        self,
-        dept_id: Optional[Union[int, str]] = None,
-        description: Optional[str] = None,
-        status: Optional[int] = None,
-        page: int = 1,
-        size: int = 10,
-        sort: Optional[str] = None
+            self,
+            dept_id: Optional[Union[int, str]] = None,
+            description: Optional[str] = None,
+            status: Optional[int] = None,
+            page: int = 1,
+            size: int = 10,
+            sort: Optional[str] = None
     ) -> PageResp[UserResp]:
         """
         分页查询用户列表（从数据库查询真实数据）
@@ -120,6 +117,7 @@ class UserServiceImpl(UserService):
         try:
             async with DatabaseSession.get_session_context() as session:
                 # 查询用户详情
+                print(f"🔍 用户详情查询: 请求用户ID = {user_id}")
                 query = select(UserEntity).where(UserEntity.id == int(user_id))
                 result = await session.execute(query)
                 user = result.scalar_one_or_none()
@@ -190,7 +188,7 @@ class UserServiceImpl(UserService):
 
                 # 3. 更新用户角色关联
                 # 3a. 删除旧的角色关联
-                await session.execute(
+                delete_result = await session.execute(
                     delete(UserRoleEntity).where(UserRoleEntity.user_id == int(user_id))
                 )
 
@@ -205,8 +203,47 @@ class UserServiceImpl(UserService):
                 # 4. 提交事务
                 await session.commit()
                 self.logger.info(f"用户更新成功: {user.username} (ID: {user_id})")
+
         except Exception as e:
-            print(f"报错：「」{e}")
+            self.logger.error(f"用户更新失败: {e}")
+            raise  # 重新抛出异常，确保控制器能感知到错误
+
+    async def update_role(self, update_req: UserRoleUpdateReq, user_id: Union[int, str]):
+        """
+        分配用户角色 - 对应参考项目的updateRole方法
+
+        Args:
+            update_req: 用户角色更新请求
+            user_id: 用户ID
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 1. 验证用户是否存在
+                user = await session.get(UserEntity, int(user_id))
+                if not user:
+                    raise ValueError(f"用户不存在: {user_id}")
+
+                # 2. 删除用户原有的角色关联 - 对应参考项目 baseMapper.lambdaUpdate().eq(UserRoleDO::getUserId, userId).remove()
+                await session.execute(
+                    delete(UserRoleEntity).where(UserRoleEntity.user_id == int(user_id))
+                )
+
+                # 3. 保存新的角色关联 - 对应参考项目 CollUtils.mapToList(roleIds, roleId -> new UserRoleDO(userId, roleId))
+                if update_req.role_ids:
+                    for role_id in update_req.role_ids:
+                        # 支持字符串和数字类型的角色ID
+                        role_id_int = int(role_id) if isinstance(role_id, str) else role_id
+                        user_role = UserRoleEntity(user_id=int(user_id), role_id=role_id_int)
+                        session.add(user_role)
+
+                # 4. 提交事务
+                await session.commit()
+                self.logger.info(f"用户角色分配成功: 用户ID={user_id}, 角色数量={len(update_req.role_ids) if update_req.role_ids else 0}")
+
+        except Exception as e:
+            self.logger.error(f"用户角色分配失败: {e}")
+            raise
+
     def _entity_to_resp(self, entity: UserEntity) -> UserResp:
         """
         将用户实体转换为响应模型
@@ -239,7 +276,8 @@ class UserServiceImpl(UserService):
             update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None
         )
 
-    def _entity_to_detail_resp(self, entity: UserEntity, role_ids: list[str] = None, role_names: list[str] = None, dept_name: str = "部门名称") -> UserDetailResp:
+    def _entity_to_detail_resp(self, entity: UserEntity, role_ids: list[str] = None, role_names: list[str] = None,
+                               dept_name: str = "部门名称") -> UserDetailResp:
         """
         将用户实体转换为详情响应模型
         Args:

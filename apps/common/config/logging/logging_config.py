@@ -130,9 +130,10 @@ class FlowMasterLogger:
     
     def _configure_third_party_loggers(self):
         """配置第三方库的日志级别"""
-        # SQLAlchemy 日志
-        logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
-        logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+        # SQLAlchemy 日志 - 完全关闭SQL输出
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.ERROR)
+        logging.getLogger('sqlalchemy.pool').setLevel(logging.ERROR)
+        logging.getLogger('sqlalchemy.dialects').setLevel(logging.ERROR)
 
         # aiosqlite 日志 - 关闭DEBUG输出
         logging.getLogger('aiosqlite').setLevel(logging.WARNING)

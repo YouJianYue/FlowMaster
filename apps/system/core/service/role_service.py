@@ -6,8 +6,8 @@
 @since: 2025/9/16
 """
 
-from typing import List, Optional, Set
-from sqlalchemy import select, func
+from typing import List, Optional, Set, TYPE_CHECKING
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.common.config.database.database_session import DatabaseSession
@@ -16,6 +16,10 @@ from apps.system.core.model.entity.user_role_entity import UserRoleEntity
 from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
 from apps.system.core.model.entity.menu_entity import MenuEntity
 from apps.common.config.logging import get_logger
+
+if TYPE_CHECKING:
+    from apps.system.core.model.resp.role_resp import RoleResp
+    from apps.common.models.page_resp import PageResp
 
 
 class RoleService:
@@ -123,9 +127,11 @@ class RoleService:
         try:
             # 检查是否为超级管理员
             is_super_admin = await self.is_super_admin_user(user_id)
+
             if is_super_admin:
                 self.logger.debug(f"用户 {user_id} 是超级管理员，返回所有权限。")
-                return await self.get_all_permissions_for_super_admin()
+                permissions = await self.get_all_permissions_for_super_admin()
+                return permissions
 
             # 对于非超级管理员，执行基于角色的权限查询
             async with DatabaseSession.get_session_context() as session:
@@ -243,9 +249,9 @@ class RoleService:
             self.logger.error(f"获取超级管理员权限失败: {str(e)}", exc_info=True)
             return set()
 
-    async def list_roles_with_pagination(self, page: int = 1, size: int = 10, **filters) -> List[dict]:
+    async def list_roles_with_pagination(self, page: int = 1, size: int = 10, **filters) -> 'PageResp':
         """
-        分页查询角色列表
+        分页查询角色列表 - 返回分页格式
 
         Args:
             page: 页码
@@ -253,48 +259,78 @@ class RoleService:
             **filters: 过滤条件
 
         Returns:
-            List[dict]: 角色列表
+            PageResp: 分页角色数据
         """
         try:
+            from apps.system.core.model.resp.role_resp import RoleResp
+            from apps.common.models.page_resp import PageResp
+
             async with DatabaseSession.get_session_context() as session:
                 # 构建基础查询
-                stmt = select(RoleEntity).order_by(RoleEntity.sort, RoleEntity.id)
+                base_stmt = select(RoleEntity)
 
                 # 添加过滤条件
+                if filters.get('description'):  # 关键词搜索
+                    base_stmt = base_stmt.where(
+                        or_(
+                            RoleEntity.name.like(f"%{filters['description']}%"),
+                            RoleEntity.code.like(f"%{filters['description']}%"),
+                            RoleEntity.description.like(f"%{filters['description']}%")
+                        )
+                    )
                 if filters.get('name'):
-                    stmt = stmt.where(RoleEntity.name.like(f"%{filters['name']}%"))
+                    base_stmt = base_stmt.where(RoleEntity.name.like(f"%{filters['name']}%"))
                 if filters.get('code'):
-                    stmt = stmt.where(RoleEntity.code.like(f"%{filters['code']}%"))
-                # 注意：RoleEntity没有status字段，跳过status过滤
+                    base_stmt = base_stmt.where(RoleEntity.code.like(f"%{filters['code']}%"))
 
-                # 分页
+                # 统计总数
+                count_stmt = select(func.count()).select_from(base_stmt.subquery())
+                total_result = await session.execute(count_stmt)
+                total = total_result.scalar_one()
+
+                # 分页查询
                 offset = (page - 1) * size
-                stmt = stmt.offset(offset).limit(size)
+                stmt = base_stmt.order_by(RoleEntity.sort, RoleEntity.id).offset(offset).limit(size)
 
                 result = await session.execute(stmt)
                 roles = result.scalars().all()
 
-                # 转换为字典格式
+                # 转换为响应模型
                 role_list = []
                 for role in roles:
-                    role_dict = {
-                        "id": str(role.id),
-                        "name": role.name,
-                        "code": role.code,
-                        "description": role.description,
-                        "dataScope": role.data_scope,  # 现在是字符串，直接返回
-                        "sort": role.sort,
-                        "isSystem": role.is_system,
-                        "createTime": role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,
-                        "updateTime": role.update_time.strftime("%Y-%m-%d %H:%M:%S") if role.update_time else None,
-                    }
-                    role_list.append(role_dict)
+                    role_resp = RoleResp(
+                        id=str(role.id),
+                        name=role.name,
+                        code=role.code,
+                        description=role.description,
+                        data_scope=role.data_scope,
+                        sort=role.sort,
+                        is_system=role.is_system,
+                        create_user_string="超级管理员",  # TODO: 从用户表关联查询
+                        create_time=role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,
+                        update_user_string=None,
+                        update_time=role.update_time.strftime("%Y-%m-%d %H:%M:%S") if role.update_time else None,
+                        disabled=False
+                    )
+                    role_list.append(role_resp)
 
-                return role_list
+                return PageResp(
+                    list=role_list,
+                    total=total,
+                    current=page,
+                    size=size,
+                    pages=(total + size - 1) // size
+                )
 
         except Exception as e:
             self.logger.error(f"分页查询角色列表失败: {str(e)}", exc_info=True)
-            return []
+            return PageResp(
+                list=[],
+                total=0,
+                current=page,
+                size=size,
+                pages=0
+            )
 
     async def create_role(self, name: str, code: str, description: str = "", data_scope: str = "SELF",
                          status: int = 1, sort: int = 0, create_user: int = 1) -> bool:
@@ -329,7 +365,6 @@ class RoleService:
                     code=code,
                     description=description,
                     data_scope=data_scope,
-                    status=status,
                     sort=sort,
                     is_system=False,
                     create_user=create_user

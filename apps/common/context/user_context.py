@@ -13,14 +13,15 @@ from apps.common.config.tenant_extension_properties import get_tenant_extension_
 
 
 class UserContext(BaseModel):
-    """用户上下文"""
-    
+    """
+    用户上下文
+
+    完全复刻参考项目的UserContext.java
+    """
+
+    # 基础字段 - 完全匹配参考项目
     id: Optional[int] = None
     username: Optional[str] = None
-    nickname: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    avatar: Optional[str] = None
     dept_id: Optional[int] = None
     pwd_reset_time: Optional[datetime] = None
     password_expiration_days: Optional[int] = None
@@ -30,6 +31,12 @@ class UserContext(BaseModel):
     client_type: Optional[str] = None
     client_id: Optional[str] = None
     tenant_id: Optional[int] = None
+
+    # 扩展字段 - 从UserDO复制的属性
+    nickname: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    avatar: Optional[str] = None
     
     def __init__(self, permissions: Set[str] = None, roles: Set[RoleContext] = None, 
                  password_expiration_days: int = None, **data):

@@ -39,15 +39,27 @@ class JWTConfig(BaseSettings):
 
 class PasswordConfig:
     """密码加密配置"""
-    
+
     # 密码上下文
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    
+
     @classmethod
     def verify_password(cls, plain_password: str, hashed_password: str) -> bool:
-        """验证密码"""
-        return cls.pwd_context.verify(plain_password, hashed_password)
-    
+        """
+        验证密码
+
+        支持Spring Security格式的bcrypt密码：{bcrypt}$2a$10$...
+        也支持标准bcrypt格式：$2a$10$...
+        """
+        # 处理Spring Security格式的bcrypt密码 (带{bcrypt}前缀)
+        if hashed_password.startswith("{bcrypt}"):
+            # 移除{bcrypt}前缀，保留真实的bcrypt哈希
+            actual_hash = hashed_password[8:]  # 移除"{bcrypt}"前缀
+            return cls.pwd_context.verify(plain_password, actual_hash)
+        else:
+            # 标准bcrypt格式
+            return cls.pwd_context.verify(plain_password, hashed_password)
+
     @classmethod
     def get_password_hash(cls, password: str) -> str:
         """获取密码哈希"""

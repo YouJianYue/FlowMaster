@@ -56,65 +56,106 @@ class AbstractLoginHandler(ABC):
         await AbstractLoginHandler._log_login_success(user_context, extra_info)
 
     @staticmethod
-    def check_user_status(user_data: Dict[str, Any]):
+    def check_user_status(user: 'UserEntity'):
         """
         检查用户状态
-        
+
+        复刻参考项目的AbstractLoginHandler.checkUserStatus方法
+
         Args:
-            user_data: 用户数据
+            user: 用户实体
         """
+        from apps.system.core.model.entity.user_entity import UserEntity
+
         # 检查用户是否被禁用
-        if user_data.get('status') == DisEnableStatusEnum.DISABLE.value:
+        if user.status == DisEnableStatusEnum.DISABLE:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="账号已被禁用，请联系管理员"
+                detail="此账号已被禁用，如有疑问，请联系管理员"
             )
 
-        # 检查账号是否过期等其他状态检查...
         # TODO: 添加部门状态检查（需要实现DeptService后）
+        # CheckUtils.throwIfEqual(DisEnableStatusEnum.DISABLE, dept.getStatus(), "此账号所属部门已被禁用，如有疑问，请联系管理员");
 
     @staticmethod
-    async def authenticate(user_data: Dict[str, Any], client_info: Dict[str, Any]) -> LoginResp:
+    async def authenticate(user: 'UserEntity', client: 'ClientEntity') -> LoginResp:
         """
         执行认证，生成令牌
-        
+
+        完全复刻参考项目的AbstractLoginHandler.authenticate(UserDO user, ClientResp client)方法
+
         Args:
-            user_data: 用户数据
-            client_info: 客户端信息
-            
+            user: 用户实体
+            client: 客户端实体
+
         Returns:
             LoginResp: 登录响应
         """
-        # 检查用户状态
-        AbstractLoginHandler.check_user_status(user_data)
+        from apps.system.core.model.entity.user_entity import UserEntity
+        from apps.system.core.model.entity.client_entity import ClientEntity
+        import copy
 
-        # 创建用户上下文 (这里简化处理，实际应该获取完整的权限和角色信息)
+        # 检查用户状态
+        AbstractLoginHandler.check_user_status(user)
+
+        # 获取用户ID和租户ID
+        user_id = user.id
+        tenant_id = 1  # TODO: 从TenantContextHolder获取，目前默认为1
+
+        # 异步获取权限、角色、密码过期天数 (复刻参考项目的CompletableFuture逻辑)
+        from apps.system.auth.service.role_permission_service import RolePermissionService
+
+        permissions = await RolePermissionService.list_permission_by_user_id(user_id)
+        roles = await RolePermissionService.list_by_user_id(user_id)
+        password_expiration_days = 90  # TODO: 从OptionService获取PASSWORD_EXPIRATION_DAYS
+
+        # 创建完整的用户上下文 (复刻参考项目的UserContext构造)
         user_context = UserContext(
-            id=user_data['id'],
-            username=user_data['username'],
-            nickname=user_data.get('nickname'),
-            email=user_data.get('email'),
-            phone=user_data.get('phone'),
-            avatar=user_data.get('avatar'),
-            dept_id=user_data.get('dept_id'),
-            tenant_id=user_data.get('tenant_id', 1),  # 默认租户
-            client_type=client_info.get('client_type'),
-            client_id=client_info.get('client_id'),
-            permissions=set(),  # TODO: 从数据库获取
-            role_codes=set(),  # TODO: 从数据库获取
-            roles=set()  # TODO: 从数据库获取
+            permissions=permissions,
+            roles=roles,
+            password_expiration_days=password_expiration_days
         )
+
+        # 复制用户属性到上下文 (复刻参考项目的BeanUtil.copyProperties(user, userContext))
+        # Python方式：使用字段复制而不是deepcopy，避免复制不必要的ORM内部状态
+        user_context.id = user.id
+        user_context.username = user.username
+        user_context.nickname = user.nickname
+        user_context.email = user.email
+        user_context.phone = user.phone
+        user_context.avatar = user.avatar
+        user_context.dept_id = user.dept_id
+        user_context.pwd_reset_time = user.pwd_reset_time
+
+        # 设置额外属性 (复刻参考项目的client相关设置)
+        user_context.tenant_id = tenant_id
+        user_context.client_type = client.client_type
+        user_context.client_id = client.client_id
 
         # 设置用户上下文
         UserContextHolder.set_context(user_context)
 
-        # 生成JWT令牌
-        token_data = {
-            "user_id": user_context.id,
-            "username": user_context.username,
-            "tenant_id": user_context.tenant_id,
-            "client_id": user_context.client_id
-        }
+        # 生成JWT令牌 - 将UserContext序列化到JWT中 (模拟参考项目将UserContext存储到Session)
+        # 使用UserContext的模型导出功能，而不是手动构建字典
+        token_data = user_context.model_dump(exclude={'roles'}, exclude_none=False)  # 包含None值
+
+        # 确保必需字段不为空
+        if not token_data.get('id') or not token_data.get('username'):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="用户信息不完整"
+            )
+
+        # 处理集合字段
+        token_data['permissions'] = list(user_context.permissions) if user_context.permissions else []
+        token_data['role_codes'] = list(user_context.role_codes) if user_context.role_codes else []
+
+        # 处理时间字段
+        if user_context.pwd_reset_time:
+            token_data['pwd_reset_time'] = user_context.pwd_reset_time.isoformat()
+
+        # 确保关键字段存在并有正确的名称
+        token_data['user_id'] = token_data['id']  # JWT中间件期望user_id字段
 
         access_token = jwt_utils.create_access_token(token_data)
         refresh_token = jwt_utils.create_refresh_token({"user_id": user_context.id})

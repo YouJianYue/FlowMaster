@@ -6,13 +6,14 @@
 @since: 2025/9/11 11:00
 """
 
-from fastapi import APIRouter, Query, Path, Depends, HTTPException
+from fastapi import APIRouter, Query, Path, HTTPException
 from typing import Optional, Union
 
 from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.common.models.page_resp import PageResp
 from apps.system.core.service.impl.user_service_impl import UserServiceImpl
 from apps.system.core.model.req.user_req import UserUpdateReq
+from apps.system.core.model.req.user_role_update_req import UserRoleUpdateReq
 from apps.system.core.model.resp.user_resp import UserResp
 from apps.system.core.model.resp.user_detail_resp import UserDetailResp
 from apps.common.context.user_context_holder import UserContextHolder
@@ -66,4 +67,19 @@ async def update_user(
         raise HTTPException(status_code=403, detail="Forbidden: Required permission 'system:user:update' is missing")
 
     await user_service.update_user(user_id, update_req)
+    return create_success_response(data=True)
+
+
+@router.patch("/user/{user_id}/role", response_model=ApiResponse[bool], summary="分配角色", description="为用户新增或移除角色")
+async def update_user_role(
+    update_req: UserRoleUpdateReq,  # JSON body参数放在前面
+    user_id: Union[int, str] = Path(..., description="用户ID", example="547889293968801834")  # Path参数放在后面
+):
+    """分配用户角色"""
+    # 权限检查
+    user_context = UserContextHolder.get_context()
+    if not user_context or "system:user:updateRole" not in user_context.permissions:
+        raise HTTPException(status_code=403, detail="Forbidden: Required permission 'system:user:updateRole' is missing")
+
+    await user_service.update_role(update_req, user_id)
     return create_success_response(data=True)

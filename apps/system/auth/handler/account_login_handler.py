@@ -11,45 +11,55 @@ from apps.system.auth.enums.auth_enums import AuthTypeEnum
 from apps.system.auth.model.req.login_req import AccountLoginReq
 from apps.system.auth.model.resp.auth_resp import LoginResp
 from apps.system.auth.config.jwt_config import password_config
+from apps.system.core.model.entity.client_entity import ClientEntity
+from apps.system.core.model.entity.user_entity import UserEntity
 
 
 class AccountLoginHandler(AbstractLoginHandler):
     """账号密码登录处理器"""
-    
+
     def get_auth_type(self) -> AuthTypeEnum:
         """获取认证类型"""
         return AuthTypeEnum.ACCOUNT
-    
-    async def login(self, request: AccountLoginReq, client_info: Dict[str, Any], extra_info: Dict[str, Any]) -> LoginResp:
+
+    async def login(self, request: AccountLoginReq, client_info: Dict[str, Any],
+                    extra_info: Dict[str, Any]) -> LoginResp:
         """
         执行账号密码登录
-        
+
         Args:
             request: 账号登录请求
             client_info: 客户端信息
             extra_info: 额外信息
-            
+
         Returns:
             LoginResp: 登录响应
         """
         try:
             # 前置处理
             await AbstractLoginHandler.pre_login(request, client_info, extra_info)
-            
-            # 验证用户凭据
-            user_data = await self._authenticate_user(request.username, request.password)
-            
+
+            # 验证用户凭据，获取UserEntity
+            user = await self._authenticate_user(request.username, request.password)
+
+            # 获取ClientEntity（临时使用字典创建对象，后续应该从数据库查询）
+            client = await self._get_client_entity(client_info)
+
             # 执行认证并生成令牌
-            login_resp = await AbstractLoginHandler.authenticate(user_data, client_info)
-            
+            login_resp = await AbstractLoginHandler.authenticate(user, client)
+
+            # 获取当前用户上下文进行后置处理
+            from apps.common.context.user_context_holder import UserContextHolder
+            current_user_context = UserContextHolder.get_context()
+
             # 后置处理
-            await AbstractLoginHandler.post_login(self.current_user_context, login_resp, extra_info)
-            
+            await AbstractLoginHandler.post_login(current_user_context, login_resp, extra_info)
+
             return login_resp
-            
+
         except HTTPException:
             # 记录登录失败日志
-            await self._log_login_failure(request.username, "密码错误", extra_info)
+            await self._log_login_failure(request.username, "认证失败", extra_info)
             raise
         except Exception as e:
             # 记录登录失败日志
@@ -58,75 +68,106 @@ class AccountLoginHandler(AbstractLoginHandler):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"登录失败: {str(e)}"
             )
-    
-    async def _authenticate_user(self, username: str, password: str) -> Dict[str, Any]:
+
+    async def _authenticate_user(self, username: str, password: str) -> 'UserEntity':
         """
         验证用户凭据
-        
+
         Args:
             username: 用户名
             password: 密码 (RSA加密或明文)
-            
+
         Returns:
-            Dict[str, Any]: 用户数据
+            UserEntity: 用户实体对象
         """
+
         # RSA解密密码
         plain_password = self._decrypt_password(password)
-        
-        # 模拟从数据库查询用户
-        # TODO: 实际实现时应该从UserService或Repository获取
-        user_data = await self._get_user_by_username(username)
-        
-        if not user_data:
+
+        # 从数据库查询用户实体
+        user = await self._get_user_by_username(username)
+
+        if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误"
             )
-        
+
         # 验证密码
-        if not password_config.verify_password(plain_password, user_data.get('password_hash')):
+        if not password_config.verify_password(plain_password, user.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误"
             )
-        
-        return user_data
-    
-    async def _get_user_by_username(self, username: str) -> Dict[str, Any]:
+
+        return user
+
+    async def _get_user_by_username(self, username: str) -> 'UserEntity':
         """
-        根据用户名获取用户信息
-        
+        根据用户名获取用户实体
+
         Args:
             username: 用户名
-            
+
         Returns:
-            Dict[str, Any]: 用户数据，如果不存在返回None
+            UserEntity: 用户实体，未找到返回None
         """
-        # TODO: 实现数据库查询
-        # 这里返回模拟数据，实际应该查询数据库
-        if username == "admin":
-            return {
-                "id": 1,
-                "username": "admin",
-                "nickname": "管理员",
-                "email": "admin@example.com",
-                "phone": None,
-                "avatar": None,
-                "password_hash": password_config.get_password_hash("admin123"),  # 修改为admin123
-                "status": 1,  # 启用状态
-                "dept_id": None,
-                "tenant_id": 1
-            }
-        
-        return None
-    
+        from apps.system.core.model.entity.user_entity import UserEntity
+        from apps.common.config.database.database_session import DatabaseSession
+        from sqlalchemy import select
+
+        async with DatabaseSession.get_session_context() as session:
+            stmt = select(UserEntity).where(UserEntity.username == username)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def _get_client_entity(self, client_info: Dict[str, Any]) -> 'ClientEntity':
+        """
+        获取客户端实体
+
+        Args:
+            client_info: 客户端信息字典
+
+        Returns:
+            ClientEntity: 客户端实体
+        """
+        from apps.common.config.database.database_session import DatabaseSession
+        from sqlalchemy import select
+
+        client_id = client_info.get('client_id')
+        if not client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="缺少客户端ID"
+            )
+
+        async with DatabaseSession.get_session_context() as session:
+            stmt = select(ClientEntity).where(ClientEntity.client_id == client_id)
+            result = await session.execute(stmt)
+            client = result.scalar_one_or_none()
+
+            if not client:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="客户端不存在"
+                )
+
+            # 检查客户端状态
+            if not client.is_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="客户端已禁用"
+                )
+
+            return client
+
     def _decrypt_password(self, password: str) -> str:
         """
         解密密码
-        
+
         Args:
             password: RSA加密的密码或明文密码
-            
+
         Returns:
             str: 解密后的密码
         """
@@ -134,42 +175,35 @@ class AccountLoginHandler(AbstractLoginHandler):
             # 尝试RSA解密
             from apps.common.util.secure_utils import SecureUtils
             from apps.common.config.rsa_properties import RsaProperties
-            
+
             # 检查是否配置了RSA密钥
             if not RsaProperties.PRIVATE_KEY:
                 print("⚠️  开发模式：未配置RSA私钥，将密码视为明文处理")
                 # 开发环境下，如果是明文密码直接返回
                 if len(password) <= 32 and not any(c in password for c in '+/='):
                     return password
-                    
-            return SecureUtils.decrypt_password_by_rsa_private_key(
-                encrypted_password=password,
-                error_msg="密码解密失败"
-            )
-            
-        except (ValueError, TypeError, Exception) as e:
-            print(f"🔓 RSA解密失败，尝试明文密码处理: {str(e)}")
-            
-            # 开发环境兜底：如果RSA解密失败，检查是否为简单明文密码
-            if len(password) <= 32 and password.isalnum():
-                print(f"💡 检测到可能的明文密码: {password}")
+
+            # 执行RSA解密 - 完全复刻参考项目的调用方式
+            decrypted_password = SecureUtils.decrypt_password_by_rsa_private_key(password, "密码解密失败")
+            print(f"🔓 RSA解密成功，密码长度: {len(decrypted_password)}")
+            print(f"🔓 RSA解密成功，密码: {decrypted_password}")
+            return decrypted_password
+
+        except Exception as e:
+            print(f"⚠️  RSA解密失败: {e}")
+            # 解密失败，尝试作为明文密码处理（开发环境兼容）
+            if len(password) <= 32 and not any(c in password for c in '+/='):
+                print("🔧 将密码视为明文处理")
                 return password
-            
-            # 如果密码看起来像Base64，尝试简单的解码（但这不是RSA解密）
-            try:
-                import base64
-                decoded = base64.b64decode(password.encode()).decode()
-                print(f"💡 Base64解码成功: {decoded}")
-                return decoded
-            except:
-                pass
-                
-            # 最后尝试：原样返回（可能前端没有加密）
-            print(f"⚠️  密码解密完全失败，原样返回")
-            return password
-    
-    @property
-    def current_user_context(self):
-        """获取当前用户上下文"""
-        from apps.common.context.user_context_holder import UserContextHolder
-        return UserContextHolder.get_context()
+
+            # 如果不像明文密码，抛出异常
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="密码解密失败，请检查密码格式"
+            )
+
+    async def _log_login_failure(self, username: str, reason: str, extra_info: Dict[str, Any]):
+        """记录登录失败日志"""
+        # TODO: 实现登录失败日志记录
+        print(f"登录失败 - 用户名: {username}, 原因: {reason}, 额外信息: {extra_info}")
+        pass
