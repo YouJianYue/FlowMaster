@@ -217,7 +217,7 @@ async def check_login_status():
                 "logged_in": True,
                 "user_id": user_context.id,
                 "username": user_context.username,
-                "is_super_admin": user_context.is_super_admin_user()
+                "is_super_admin": user_context.is_super_admin
             }
         )
     else:

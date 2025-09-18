@@ -161,7 +161,7 @@ class AuthService:
             "phone": user_context.phone,
             "permissions": list(user_context.permissions),
             "roles": list(user_context.role_codes),
-            "is_super_admin": user_context.is_super_admin_user(),
+            "is_super_admin": user_context.is_super_admin,
             "is_pwd_expired": user_context.is_password_expired(),
             "tenant_id": user_context.tenant_id,
             "dept_id": user_context.dept_id

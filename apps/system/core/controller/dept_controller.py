@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 部门管理控制器
-
-@author: continew-admin
-@since: 2025/9/14 12:00
 """
 
-from fastapi import APIRouter, Query, Path, Depends, HTTPException, Body
+from fastapi import APIRouter, Query, Path, Depends, HTTPException
 from typing import List, Optional, Union
 from datetime import datetime
 from sqlalchemy import select
@@ -16,7 +13,6 @@ from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.service.dept_service import DeptService
 from apps.system.core.service.impl.dept_service_impl import DeptServiceImpl
 from apps.system.core.model.resp.dept_resp import DeptResp
-from apps.system.core.model.resp.dept_detail_resp import DeptDetailResp
 from apps.system.core.model.resp.dept_resp_exact import DeptRespExact
 from apps.system.core.model.req.dept_req import DeptCreateReq, DeptUpdateReq
 from apps.system.core.model.req.dept_batch_delete_req import DeptBatchDeleteReq

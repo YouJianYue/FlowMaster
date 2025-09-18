@@ -185,8 +185,6 @@ class AccountLoginHandler(AbstractLoginHandler):
 
             # 执行RSA解密 - 完全复刻参考项目的调用方式
             decrypted_password = SecureUtils.decrypt_password_by_rsa_private_key(password, "密码解密失败")
-            print(f"🔓 RSA解密成功，密码长度: {len(decrypted_password)}")
-            print(f"🔓 RSA解密成功，密码: {decrypted_password}")
             return decrypted_password
 
         except Exception as e:

@@ -4,9 +4,8 @@
 API统一响应模型
 """
 
-from typing import Optional, TypeVar, Generic, Union
+from typing import Optional, TypeVar, Generic
 from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime
 import time
 
 T = TypeVar('T')

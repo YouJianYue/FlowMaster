@@ -148,27 +148,47 @@ class UserContextHolder:
         return None
     
     @classmethod
-    def is_super_admin_user(cls) -> bool:
+    def is_super_admin(cls) -> bool:
         """
-        是否为超级管理员用户
-        
+        是否为超级管理员用户（属性方式访问）
+
         Returns:
             true：是；false：否
         """
         context = cls.get_context()
         if context is None:
             raise ValueError("用户未登录")
-        return context.is_super_admin_user()
-    
+        return context.is_super_admin
+
+    @classmethod
+    def is_super_admin_user(cls) -> bool:
+        """
+        是否为超级管理员用户（方法方式访问，保持向后兼容）
+
+        Returns:
+            true：是；false：否
+        """
+        return cls.is_super_admin
+
+    @classmethod
+    def is_tenant_admin(cls) -> bool:
+        """
+        是否为租户管理员用户（属性方式访问）
+
+        Returns:
+            true：是；false：否
+        """
+        context = cls.get_context()
+        if context is None:
+            raise ValueError("用户未登录")
+        return context.is_tenant_admin
+
     @classmethod
     def is_tenant_admin_user(cls) -> bool:
         """
-        是否为租户管理员用户
-        
+        是否为租户管理员用户（方法方式访问，保持向后兼容）
+
         Returns:
             true：是；false：否
         """
-        context = cls.get_context()
-        if context is None:
-            raise ValueError("用户未登录")
-        return context.is_tenant_admin_user()
+        return cls.is_tenant_admin

@@ -140,10 +140,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         user_id = payload.get("user_id")
         username = payload.get("username")
 
-        print(f"🔍 JWT中间件: 设置用户上下文，user_id={user_id}, username={username}")
 
         if not user_id or not username:
-            print(f"🔍 JWT中间件: 令牌格式错误 - user_id={user_id}, username={username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="令牌格式错误"

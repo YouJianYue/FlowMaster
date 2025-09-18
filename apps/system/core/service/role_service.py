@@ -7,8 +7,7 @@
 """
 
 from typing import List, Optional, Set, TYPE_CHECKING
-from sqlalchemy import select, func, or_
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, or_, delete
 
 from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.model.entity.role_entity import RoleEntity
@@ -16,6 +15,7 @@ from apps.system.core.model.entity.user_role_entity import UserRoleEntity
 from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
 from apps.system.core.model.entity.menu_entity import MenuEntity
 from apps.common.config.logging import get_logger
+from apps.common.enums.data_scope_enum import DataScopeEnum
 
 if TYPE_CHECKING:
     from apps.system.core.model.resp.role_resp import RoleResp
@@ -129,17 +129,17 @@ class RoleService:
             is_super_admin = await self.is_super_admin_user(user_id)
 
             if is_super_admin:
-                self.logger.debug(f"用户 {user_id} 是超级管理员，返回所有权限。")
+                # self.logger.debug(f"用户 {user_id} 是超级管理员，返回所有权限。")
                 permissions = await self.get_all_permissions_for_super_admin()
                 return permissions
 
             # 对于非超级管理员，执行基于角色的权限查询
             async with DatabaseSession.get_session_context() as session:
-                # SQLAlchemy 会自动通过我们定义的 relationship 进行 join
+                # 手动连接查询：用户 -> 用户角色 -> 角色菜单 -> 菜单
                 stmt = (
                     select(MenuEntity.permission).distinct()
-                    .join(MenuEntity.roles)
-                    .join(RoleEntity.user_roles)
+                    .join(RoleMenuEntity, MenuEntity.id == RoleMenuEntity.menu_id)
+                    .join(UserRoleEntity, RoleMenuEntity.role_id == UserRoleEntity.role_id)
                     .where(
                         UserRoleEntity.user_id == user_id,
                         MenuEntity.permission.isnot(None),
@@ -261,9 +261,10 @@ class RoleService:
         Returns:
             PageResp: 分页角色数据
         """
+        from apps.system.core.model.resp.role_resp import RoleResp
+        from apps.common.models.page_resp import PageResp
+
         try:
-            from apps.system.core.model.resp.role_resp import RoleResp
-            from apps.common.models.page_resp import PageResp
 
             async with DatabaseSession.get_session_context() as session:
                 # 构建基础查询
@@ -303,7 +304,7 @@ class RoleService:
                         name=role.name,
                         code=role.code,
                         description=role.description,
-                        data_scope=role.data_scope,
+                        data_scope=DataScopeEnum.from_value_code(role.data_scope),
                         sort=role.sort,
                         is_system=role.is_system,
                         create_user_string="超级管理员",  # TODO: 从用户表关联查询
@@ -485,7 +486,7 @@ class RoleService:
 
                 # 删除角色菜单关联
                 await session.execute(
-                    select(RoleMenuEntity).where(RoleMenuEntity.role_id.in_(role_ids)).delete()
+                    delete(RoleMenuEntity).where(RoleMenuEntity.role_id.in_(role_ids))
                 )
 
                 # 删除角色
@@ -517,6 +518,240 @@ class RoleService:
 
         except Exception as e:
             self.logger.error(f"查询启用角色列表失败: {str(e)}", exc_info=True)
+            return []
+
+    async def update_permission(self, role_id: int, menu_ids: List[int], menu_check_strictly: bool = False) -> bool:
+        """
+        更新角色权限（菜单权限）
+
+        Args:
+            role_id: 角色ID
+            menu_ids: 菜单ID列表
+            menu_check_strictly: 菜单选择是否父子节点关联
+
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 检查角色是否存在
+                role_stmt = select(RoleEntity).where(RoleEntity.id == role_id)
+                role_result = await session.execute(role_stmt)
+                role = role_result.scalar_one_or_none()
+
+                if not role:
+                    self.logger.warning(f"角色不存在: ID {role_id}")
+                    return False
+
+                # 检查系统角色保护
+                if role.is_system:
+                    self.logger.warning(f"系统角色不允许修改权限: {role.name}")
+                    return False
+
+                # 删除角色现有的菜单权限
+                from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
+                existing_stmt = select(RoleMenuEntity).where(RoleMenuEntity.role_id == role_id)
+                existing_result = await session.execute(existing_stmt)
+                existing_role_menus = existing_result.scalars().all()
+
+                for role_menu in existing_role_menus:
+                    await session.delete(role_menu)
+
+                # 添加新的菜单权限
+                if menu_ids:
+                    # 验证菜单ID是否存在
+                    menu_stmt = select(MenuEntity.id).where(MenuEntity.id.in_(menu_ids))
+                    menu_result = await session.execute(menu_stmt)
+                    valid_menu_ids = {menu_id for menu_id in menu_result.scalars().all()}
+
+                    invalid_menu_ids = set(menu_ids) - valid_menu_ids
+                    if invalid_menu_ids:
+                        self.logger.warning(f"菜单不存在: {invalid_menu_ids}")
+                        return False
+
+                    # 创建新的角色菜单关联
+                    new_role_menus = []
+                    for menu_id in menu_ids:
+                        role_menu = RoleMenuEntity(
+                            role_id=role_id,
+                            menu_id=menu_id
+                        )
+                        new_role_menus.append(role_menu)
+
+                    session.add_all(new_role_menus)
+
+                await session.commit()
+
+                self.logger.info(f"成功更新角色 {role_id} 的权限，菜单数量: {len(menu_ids)}")
+                return True
+
+        except Exception as e:
+            self.logger.error(f"更新角色权限失败: {str(e)}", exc_info=True)
+            return False
+
+    async def assign_to_users(self, role_id: int, user_ids: List[int]) -> bool:
+        """
+        分配角色给用户
+
+        Args:
+            role_id: 角色ID
+            user_ids: 用户ID列表
+
+        Returns:
+            bool: 分配是否成功
+        """
+        try:
+            # 使用用户角色服务来处理分配逻辑
+            from apps.system.core.service.user_role_service import get_user_role_service
+            user_role_service = get_user_role_service()
+            return await user_role_service.assign_users_to_role(role_id, user_ids)
+
+        except Exception as e:
+            self.logger.error(f"分配角色给用户失败: {str(e)}", exc_info=True)
+            return False
+
+    async def list_roles_for_dict(self, **filters) -> List[dict]:
+        """
+        查询角色字典列表（用于下拉选择等）
+
+        Args:
+            **filters: 过滤条件
+
+        Returns:
+            List[dict]: 角色字典数据
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 构建基础查询
+                base_stmt = select(RoleEntity)
+
+                # 添加过滤条件
+                if filters.get('description'):  # 关键词搜索
+                    base_stmt = base_stmt.where(
+                        or_(
+                            RoleEntity.name.like(f"%{filters['description']}%"),
+                            RoleEntity.code.like(f"%{filters['description']}%"),
+                            RoleEntity.description.like(f"%{filters['description']}%")
+                        )
+                    )
+                if filters.get('name'):
+                    base_stmt = base_stmt.where(RoleEntity.name.like(f"%{filters['name']}%"))
+                if filters.get('code'):
+                    base_stmt = base_stmt.where(RoleEntity.code.like(f"%{filters['code']}%"))
+
+                # 排序查询
+                sort_fields = filters.get('sort', [])
+                if sort_fields:
+                    # 处理排序字段
+                    for sort_field in sort_fields:
+                        if sort_field.endswith(',desc'):
+                            field_name = sort_field.replace(',desc', '')
+                            if hasattr(RoleEntity, field_name):
+                                base_stmt = base_stmt.order_by(getattr(RoleEntity, field_name).desc())
+                        elif sort_field.endswith(',asc'):
+                            field_name = sort_field.replace(',asc', '')
+                            if hasattr(RoleEntity, field_name):
+                                base_stmt = base_stmt.order_by(getattr(RoleEntity, field_name).asc())
+                        else:
+                            if hasattr(RoleEntity, sort_field):
+                                base_stmt = base_stmt.order_by(getattr(RoleEntity, sort_field))
+                else:
+                    base_stmt = base_stmt.order_by(RoleEntity.sort, RoleEntity.id)
+
+                result = await session.execute(base_stmt)
+                roles = result.scalars().all()
+
+                # 转换为字典格式
+                role_dict_list = []
+                for role in roles:
+                    role_dict = {
+                        "label": role.name,
+                        "value": str(role.id),
+                        "disabled": role.is_system  # 系统角色不可选择
+                    }
+                    role_dict_list.append(role_dict)
+
+                return role_dict_list
+
+        except Exception as e:
+            self.logger.error(f"查询角色字典列表失败: {str(e)}", exc_info=True)
+            return []
+
+    async def list_simple_roles(self, **filters) -> List['RoleResp']:
+        """
+        查询角色简单列表（用于列表显示）
+
+        Args:
+            **filters: 过滤条件
+
+        Returns:
+            List[RoleResp]: 角色列表
+        """
+        try:
+            from apps.system.core.model.resp.role_resp import RoleResp
+
+            async with DatabaseSession.get_session_context() as session:
+                # 构建基础查询
+                base_stmt = select(RoleEntity)
+
+                # 添加过滤条件
+                if filters.get('description'):  # 关键词搜索
+                    base_stmt = base_stmt.where(
+                        or_(
+                            RoleEntity.name.like(f"%{filters['description']}%"),
+                            RoleEntity.code.like(f"%{filters['description']}%"),
+                            RoleEntity.description.like(f"%{filters['description']}%")
+                        )
+                    )
+                if filters.get('name'):
+                    base_stmt = base_stmt.where(RoleEntity.name.like(f"%{filters['name']}%"))
+                if filters.get('code'):
+                    base_stmt = base_stmt.where(RoleEntity.code.like(f"%{filters['code']}%"))
+
+                # 排序处理
+                sort_fields = filters.get('sort', [])
+                if sort_fields:
+                    for sort_field in sort_fields:
+                        if sort_field.endswith(',desc'):
+                            field_name = sort_field.replace(',desc', '')
+                            if hasattr(RoleEntity, field_name):
+                                base_stmt = base_stmt.order_by(getattr(RoleEntity, field_name).desc())
+                        elif sort_field.endswith(',asc'):
+                            field_name = sort_field.replace(',asc', '')
+                            if hasattr(RoleEntity, field_name):
+                                base_stmt = base_stmt.order_by(getattr(RoleEntity, field_name).asc())
+                        else:
+                            if hasattr(RoleEntity, sort_field):
+                                base_stmt = base_stmt.order_by(getattr(RoleEntity, sort_field))
+                else:
+                    base_stmt = base_stmt.order_by(RoleEntity.sort, RoleEntity.id)
+
+                result = await session.execute(base_stmt)
+                roles = result.scalars().all()
+
+                # 转换为响应模型
+                role_list = []
+                for role in roles:
+                    role_resp = RoleResp(
+                        id=str(role.id),
+                        name=role.name,
+                        code=role.code,
+                        description=role.description,
+                        data_scope=DataScopeEnum.from_value_code(role.data_scope),
+                        sort=role.sort,
+                        is_system=role.is_system,
+                        create_user_string="超级管理员",  # TODO: 从用户表关联查询
+                        create_time=role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,
+                        update_user_string=None,
+                        update_time=role.update_time.strftime("%Y-%m-%d %H:%M:%S") if role.update_time else None,
+                        disabled=False
+                    )
+                    role_list.append(role_resp)
+
+                return role_list
+
+        except Exception as e:
+            self.logger.error(f"查询角色简单列表失败: {str(e)}", exc_info=True)
             return []
 
 

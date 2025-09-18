@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 用户管理 API
-
-@author: continew-admin
-@since: 2025/9/11 11:00
 """
 
 from fastapi import APIRouter, Query, Path, HTTPException

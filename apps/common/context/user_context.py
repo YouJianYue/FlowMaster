@@ -74,27 +74,47 @@ class UserContext(BaseModel):
         expiration_date = self.pwd_reset_time + timedelta(days=self.password_expiration_days)
         return expiration_date < datetime.now()
     
+    @property
+    def is_super_admin(self) -> bool:
+        """
+        是否为超级管理员用户（属性方式访问）
+
+        Returns:
+            true-是；false-否
+        """
+        return self.is_super_admin_user()
+
     def is_super_admin_user(self) -> bool:
         """
-        是否为超级管理员用户
-        
+        是否为超级管理员用户（方法方式访问，保持向后兼容）
+
         Returns:
             true-是；false-否
         """
         if not self.role_codes:
             return False
         return RoleCodeEnum.SUPER_ADMIN.value in self.role_codes
-    
+
+    @property
+    def is_tenant_admin(self) -> bool:
+        """
+        是否为租户管理员用户（属性方式访问）
+
+        Returns:
+            true-是；false-否
+        """
+        return self.is_tenant_admin_user()
+
     def is_tenant_admin_user(self) -> bool:
         """
-        是否为租户管理员用户
-        
+        是否为租户管理员用户（方法方式访问，保持向后兼容）
+
         Returns:
             true-是；false-否
         """
         if not self.role_codes:
             return False
-        
+
         tenant_properties = get_tenant_extension_properties()
-        return (not tenant_properties.is_default_tenant() and 
+        return (not tenant_properties.is_default_tenant() and
                 RoleCodeEnum.TENANT_ADMIN.value in self.role_codes)
