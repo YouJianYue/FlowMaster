@@ -1,13 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 部门数据初始化服务
-
-@author: continew-admin
-@since: 2025/9/14 13:00
 """
 
 from typing import List
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import datetime
 

@@ -12,9 +12,9 @@ from typing import Callable, Union, List
 from fastapi import HTTPException, status, Request, Depends
 from apps.common.context.user_context_holder import UserContextHolder
 from apps.system.core.service.menu_service import get_menu_service
-import logging
+from apps.common.config.logging.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PermissionChecker:

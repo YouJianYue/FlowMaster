@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 数据库初始化服务 - 直接执行参考项目的SQL文件
-
-@author: continew-admin
-@since: 2025/9/14 14:00
 """
 
 from pathlib import Path
@@ -24,7 +21,7 @@ class DatabaseInitService:
 
     async def init_database(self, force_reinit: bool = False) -> bool:
         """
-        初始化数据库 - 直接执行参考项目的SQL文件
+        初始化数据库 - 执行参考项目的数据初始化
 
         Args:
             force_reinit: 是否强制重新初始化
@@ -37,14 +34,9 @@ class DatabaseInitService:
                 self.logger.info("🎯 数据库已初始化，跳过初始化过程")
                 return True
 
-            self.logger.info("🚀 开始数据库初始化（使用SQLite兼容SQL文件）...")
+            self.logger.info("🚀 开始数据库初始化（执行数据填充）...")
 
-            # 1. 执行表结构初始化
-            if not await self._execute_sql_file("schema.sql"):
-                self.logger.error("❌ 表结构初始化失败")
-                return False
-
-            # 2. 执行数据初始化
+            # 直接执行数据初始化（表结构已经由ORM创建）
             if not await self._execute_sql_file("data.sql"):
                 self.logger.error("❌ 数据初始化失败")
                 return False
@@ -68,20 +60,22 @@ class DatabaseInitService:
             async with DatabaseSession.get_session_context() as session:
                 # 检查关键表是否存在且有足够数据
                 tables_to_check = [
-                    ('sys_menu', 30),    # 至少30个菜单
-                    ('sys_user', 5),     # 至少5个用户
-                    ('sys_dept', 5),     # 至少5个部门
-                    ('sys_role', 3),     # 至少3个角色
+                    ("sys_menu", 30),  # 至少30个菜单
+                    ("sys_user", 5),  # 至少5个用户
+                    ("sys_dept", 5),  # 至少5个部门
+                    ("sys_role", 3),  # 至少3个角色
                 ]
 
                 for table_name, min_count in tables_to_check:
                     # 检查表是否存在
-                    result = await session.execute(text(f"""
+                    result = await session.execute(
+                        text(f"""
                         SELECT COUNT(*) as count
                         FROM sqlite_master
                         WHERE type='table'
                         AND name = '{table_name}'
-                    """))
+                    """)
+                    )
 
                     table_exists = result.fetchone()[0] > 0
                     if not table_exists:
@@ -89,11 +83,15 @@ class DatabaseInitService:
                         return False
 
                     # 检查是否有足够数据
-                    result = await session.execute(text(f"SELECT COUNT(*) as count FROM {table_name}"))
+                    result = await session.execute(
+                        text(f"SELECT COUNT(*) as count FROM {table_name}")
+                    )
                     data_count = result.fetchone()[0]
 
                     if data_count < min_count:
-                        self.logger.debug(f"表 {table_name} 数据不足: {data_count}/{min_count}")
+                        self.logger.debug(
+                            f"表 {table_name} 数据不足: {data_count}/{min_count}"
+                        )
                         return False
 
                 self.logger.debug("所有关键表数据检查通过")
@@ -123,7 +121,7 @@ class DatabaseInitService:
             self.logger.info(f"📄 执行SQL文件: {filename}")
 
             # 读取SQL文件内容
-            with open(sql_file_path, 'r', encoding='utf-8') as f:
+            with open(sql_file_path, "r", encoding="utf-8") as f:
                 sql_content = f.read()
 
             # SQLite SQL文件已经是兼容格式，只需要简单清理
@@ -138,9 +136,9 @@ class DatabaseInitService:
                 failed_statements = 0
 
                 for i, statement in enumerate(statements):
-                    if statement and not statement.strip().startswith('--'):
+                    if statement and not statement.strip().startswith("--"):
                         try:
-                            self.logger.debug(f"✓ 执行第{i+1}个SQL语句: {statement[:100]}...")
+                            # 不再输出具体SQL语句内容，只记录执行进度
                             await session.execute(text(statement))
                             successful_statements += 1
                         except Exception as e:
@@ -152,36 +150,46 @@ class DatabaseInitService:
                                 "constraint failed",
                                 "unique constraint",
                                 "primary key",
-                                "not null constraint"
+                                "not null constraint",
                             ]
 
-                            is_ignorable = any(err in error_msg for err in ignorable_errors)
+                            is_ignorable = any(
+                                err in error_msg for err in ignorable_errors
+                            )
 
                             if is_ignorable:
-                                self.logger.warning(f"⚠️ SQL语句执行警告（已忽略）: {str(e)}")
-                                self.logger.debug(f"警告的SQL语句: {statement[:200]}...")
+                                # 数据重复冲突是正常的，静默处理
                                 failed_statements += 1
                             else:
-                                self.logger.error(f"❌ SQL语句执行失败: {str(e)}")
-                                self.logger.error(f"失败的SQL语句: {statement[:200]}...")
+                                # 只输出错误的SQL语句开头部分，不输出完整语句
+                                sql_preview = statement[:100] + "..." if len(statement) > 100 else statement
+                                self.logger.error(f"❌ SQL语句 {i + 1} 执行失败: {str(e)}")
+                                self.logger.error(f"失败的SQL语句预览: {sql_preview}")
                                 failed_statements += 1
                                 # 严重错误也不中断，继续执行其他语句
                                 continue
 
                 await session.commit()
 
-                self.logger.info(f"📊 SQL执行统计: 成功 {successful_statements} 个，失败/跳过 {failed_statements} 个")
+                # 简化统计信息，只有真正的错误才报告
+                if failed_statements > 0 and successful_statements == 0:
+                    self.logger.warning(f"SQL file {filename}: all statements failed")
+                elif successful_statements > 0:
+                    self.logger.info(f"SQL file {filename}: {successful_statements} statements executed successfully")
 
                 # 只要有一半以上语句成功就认为初始化成功
-                if successful_statements > 0 and successful_statements >= len(statements) * 0.5:
-                    self.logger.info(f"✅ SQL文件执行完成: {filename} (成功率: {successful_statements}/{len(statements)})")
+                if (
+                    successful_statements > 0
+                    and successful_statements >= len(statements) * 0.5
+                ):
+                    self.logger.info(f"SQL file {filename} execution completed successfully")
                     return True
                 else:
-                    self.logger.warning(f"⚠️ SQL文件执行完成但成功率较低: {filename} (成功率: {successful_statements}/{len(statements)})")
+                    self.logger.warning(f"SQL file {filename} had low success rate: {successful_statements}/{len(statements)}")
                     return successful_statements > 0  # 只要有成功的语句就返回True
 
         except Exception as e:
-            self.logger.error(f"❌ 执行SQL文件 {filename} 失败: {str(e)}", exc_info=True)
+            self.logger.error(f"Failed to execute SQL file {filename}: {str(e)}")
             return False
 
     def _clean_sqlite_sql_content(self, sql_content: str) -> str:
@@ -194,17 +202,17 @@ class DatabaseInitService:
         Returns:
             str: 清理后的SQL内容
         """
-        lines = sql_content.split('\n')
+        lines = sql_content.split("\n")
         cleaned_lines = []
 
         for line in lines:
             line = line.strip()
             # 跳过注释和空行
-            if (line.startswith('--') or not line):
+            if line.startswith("--") or not line:
                 continue
             cleaned_lines.append(line)
 
-        return '\n'.join(cleaned_lines)
+        return "\n".join(cleaned_lines)
 
     def _split_sql_statements(self, sql_content: str) -> list:
         """
@@ -232,10 +240,10 @@ class DatabaseInitService:
                 in_single_quote = not in_single_quote
             elif char == '"' and not in_single_quote:
                 in_double_quote = not in_double_quote
-            elif char == ';' and not in_single_quote and not in_double_quote:
+            elif char == ";" and not in_single_quote and not in_double_quote:
                 # 找到语句结束
                 statement = current_statement.strip()
-                if statement and not statement.startswith('--') and len(statement) > 5:
+                if statement and not statement.startswith("--") and len(statement) > 5:
                     statements.append(statement)
                 current_statement = ""
                 i += 1
@@ -246,10 +254,59 @@ class DatabaseInitService:
 
         # 添加最后一个语句（如果没有分号结尾）
         statement = current_statement.strip()
-        if statement and not statement.startswith('--') and len(statement) > 5:
+        if statement and not statement.startswith("--") and len(statement) > 5:
             statements.append(statement)
 
         return statements
+
+    async def _remove_existing_database(self) -> bool:
+        """
+        删除现有数据库文件（用于强制重新初始化）
+
+        Returns:
+            bool: 删除是否成功
+        """
+        try:
+            # 获取数据库文件路径
+            from apps.common.config.database.database_config import get_database_config
+            db_config = get_database_config()
+
+            # 从DATABASE_URL中提取SQLite数据库文件路径
+            if "sqlite" in db_config.url.lower():
+                # 解析sqlite:///path/to/database.db格式
+                import re
+                match = re.search(r'sqlite.*:///(.*)', db_config.url)
+                if match:
+                    db_file_path = Path(match.group(1))
+                    if db_file_path.exists():
+                        db_file_path.unlink()
+                        self.logger.info(f"🗑️ 已删除数据库文件: {db_file_path}")
+                        return True
+
+            return True
+        except Exception as e:
+            self.logger.warning(f"⚠️ 删除数据库文件失败: {str(e)}")
+            return False
+
+    async def _create_tables_with_orm(self) -> bool:
+        """
+        使用SQLAlchemy ORM创建表结构
+
+        Returns:
+            bool: 创建是否成功
+        """
+        try:
+            from apps.common.config.database import create_tables
+
+            # 使用已有的create_tables方法创建所有表
+            await create_tables()
+
+            self.logger.info("✅ SQLAlchemy ORM表结构创建完成")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"❌ SQLAlchemy ORM表结构创建失败: {str(e)}", exc_info=True)
+            return False
 
     async def reset_database(self) -> bool:
         """
@@ -264,17 +321,19 @@ class DatabaseInitService:
 
             async with DatabaseSession.get_session_context() as session:
                 # 获取所有系统表名
-                result = await session.execute(text("""
+                result = await session.execute(
+                    text("""
                     SELECT name FROM sqlite_master
                     WHERE type='table'
                     AND name LIKE 'sys_%'
-                """))
+                """)
+                )
 
                 tables = [row[0] for row in result.fetchall()]
 
                 # 删除所有系统表
                 for table in tables:
-                    await session.execute(text(f'DROP TABLE IF EXISTS {table}'))
+                    await session.execute(text(f"DROP TABLE IF EXISTS {table}"))
                     self.logger.info(f"🗑️ 删除表: {table}")
 
                 await session.commit()

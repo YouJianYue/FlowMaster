@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 用户服务接口
-
-@author: continew-admin
-@since: 2025/9/11 11:00
 """
 
 from abc import ABC, abstractmethod

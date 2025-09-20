@@ -11,12 +11,12 @@ from PIL import Image, ImageDraw, ImageFont
 import random
 import uuid as uuid_module
 from datetime import datetime, timedelta
-import logging
 
 from apps.common.config.captcha_properties import get_captcha_properties
 from apps.common.models.api_response import create_success_response
+from apps.common.config.logging.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/captcha", tags=["验证码"])
 

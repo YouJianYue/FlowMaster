@@ -4,7 +4,7 @@
 路由构建器 - 对应参考项目的路由树构建逻辑
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from apps.system.core.model.entity.menu_entity import MenuEntity
 from apps.system.core.model.resp.route_resp import RouteResp, RouteMetaResp
 from apps.system.core.service.menu_service import MenuService

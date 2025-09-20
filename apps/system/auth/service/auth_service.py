@@ -15,7 +15,6 @@ from apps.common.context.user_context_holder import UserContextHolder
 from apps.system.core.service.client_service import ClientService
 from apps.system.core.service.menu_service import MenuService
 from apps.system.core.service.route_builder import RouteBuilder
-from apps.system.core.model.resp.route_resp import RouteResp
 from apps.common.config.exception.global_exception_handler import BusinessException
 
 

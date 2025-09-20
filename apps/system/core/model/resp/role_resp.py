@@ -113,6 +113,12 @@ class RoleDetailResp(BaseDetailResponse):
         }
     )
 
+    # 重写ID字段为字符串类型（保持与其他模块一致）
+    id: str = Field(
+        description="角色ID（字符串类型）",
+        examples=["1"]
+    )
+
     # 名称
     name: str = Field(
         description="名称",
@@ -177,15 +183,6 @@ class RoleDetailResp(BaseDetailResponse):
         description="权限范围：部门 ID 列表",
         examples=[[5]]
     )
-
-    @property
-    def disabled(self) -> bool:
-        """
-        重写disabled属性：系统内置角色不可操作
-
-        一比一复刻参考项目的 getDisabled() 逻辑
-        """
-        return self.is_system
 
 
 class RolePermissionResp(BaseModel):

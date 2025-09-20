@@ -78,30 +78,54 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     def _should_authenticate(self, request: Request) -> bool:
         """
         判断是否需要认证
-        
+
         Args:
             request: 请求对象
-            
+
         Returns:
             bool: 是否需要认证
         """
         path = request.url.path
-        
+
         # 根路径特殊处理：只匹配完全相同的路径
         if path == "/":
             return False
-            
+
         # 健康检查等公开路径不需要认证
         if path == "/health":
             return False
-        
+
+        # 验证码路径不需要认证
+        if path.startswith("/captcha"):
+            return False
+
+        # 系统公共字典选项不需要认证
+        if path.startswith("/system/common/dict/option"):
+            return False
+
+        # 租户公共接口不需要认证
+        if path.startswith("/tenant/common"):
+            return False
+
         # 检查排除路径（排除根路径，避免误匹配）
         exclude_paths_filtered = [ep for ep in self.exclude_paths if ep != "/"]
-        
+
         for exclude_path in exclude_paths_filtered:
-            if path.startswith(exclude_path):
+            # 支持通配符匹配
+            if exclude_path.endswith("/**"):
+                # 匹配路径前缀，例如 /captcha/** 匹配 /captcha/generate
+                prefix = exclude_path[:-3]  # 移除 '/**'
+                if path.startswith(prefix):  # 简化逻辑：只要以prefix开头就匹配
+                    return False
+            elif exclude_path.endswith("/*"):
+                # 匹配单级通配符，例如 /*.html 匹配 /index.html
+                prefix = exclude_path[:-2]  # 移除 '/*'
+                if path.startswith(prefix + "/") and "/" not in path[len(prefix)+1:]:
+                    return False
+            elif path.startswith(exclude_path):
+                # 普通前缀匹配
                 return False
-        
+
         return True
     
     def _extract_token(self, request: Request) -> Optional[str]:

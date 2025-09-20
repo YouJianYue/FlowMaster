@@ -44,8 +44,7 @@ async def get_dept_tree(
 
 @router.get("/{dept_id}", response_model=ApiResponse[DeptRespExact], summary="查询部门详情")
 async def get_dept_detail(
-    dept_id: Union[int, str] = Path(..., description="部门ID", example="1"),
-    dept_service: DeptService = Depends(get_dept_service)
+    dept_id: Union[int, str] = Path(..., description="部门ID", example="1")
 ):
     """
     查询部门详情（完全匹配参考项目格式）

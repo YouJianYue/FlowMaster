@@ -2,11 +2,9 @@
 """
 个人消息 API
 
-@author: continew-admin  
-@since: 2025/4/5 21:30
 """
 
-from fastapi import APIRouter, Depends, Query, Path, HTTPException
+from fastapi import APIRouter, Query, Path, HTTPException
 from typing import Optional, List
 
 from apps.common.context.user_context_holder import UserContextHolder
@@ -26,9 +24,14 @@ message_service = MessageServiceImpl()
 notice_service = NoticeServiceImpl()
 
 
-@router.get("/unread", response_model=ApiResponse[MessageUnreadResp], summary="查询未读消息数量", description="查询当前用户的未读消息数量")
+@router.get(
+    "/unread",
+    response_model=ApiResponse[MessageUnreadResp],
+    summary="查询未读消息数量",
+    description="查询当前用户的未读消息数量",
+)
 async def count_unread_message(
-    detail: Optional[bool] = Query(None, description="是否查询详情", example=True)
+    detail: Optional[bool] = Query(None, description="是否查询详情", example=True),
 ):
     """查询未读消息数量"""
     user_id = UserContextHolder.get_user_id() or 1  # 临时使用默认用户ID
@@ -36,7 +39,12 @@ async def count_unread_message(
     return create_success_response(data=result)
 
 
-@router.get("/notice/unread", response_model=ApiResponse[NoticeUnreadCountResp], summary="查询未读公告数量", description="查询当前用户的未读公告数量")
+@router.get(
+    "/notice/unread",
+    response_model=ApiResponse[NoticeUnreadCountResp],
+    summary="查询未读公告数量",
+    description="查询当前用户的未读公告数量",
+)
 async def count_unread_notice():
     """查询未读公告数量"""
     user_id = UserContextHolder.get_user_id() or 1  # 临时使用默认用户ID
@@ -45,7 +53,12 @@ async def count_unread_notice():
     return create_success_response(data=result)
 
 
-@router.get("/notice/unread/{method}", response_model=ApiResponse[List[int]], summary="查询未读公告", description="查询当前用户的未读公告")
+@router.get(
+    "/notice/unread/{method}",
+    response_model=ApiResponse[List[int]],
+    summary="查询未读公告",
+    description="查询当前用户的未读公告",
+)
 async def list_unread_notice(method: str):
     """查询未读公告"""
     user_id = UserContextHolder.get_user_id() or 1  # 临时使用默认用户ID
@@ -54,7 +67,12 @@ async def list_unread_notice(method: str):
     return create_success_response(data=result)
 
 
-@router.get("/notice/{notice_id}", response_model=ApiResponse[NoticeDetailResp], summary="获取公告详情", description="根据ID获取公告详情")
+@router.get(
+    "/notice/{notice_id}",
+    response_model=ApiResponse[NoticeDetailResp],
+    summary="获取公告详情",
+    description="根据ID获取公告详情",
+)
 async def get_notice_detail(notice_id: int = Path(..., description="公告ID", gt=0)):
     """获取公告详情"""
     result = await notice_service.get_by_id(notice_id)

@@ -113,6 +113,23 @@ class RoleService:
             self.logger.error(f"根据用户ID获取角色编码集合失败: {str(e)}", exc_info=True)
             return set()
 
+    async def get_role_names_by_user_id(self, user_id: int) -> List[str]:
+        """
+        根据用户ID获取角色名称列表
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            List[str]: 角色名称列表
+        """
+        try:
+            roles = await self.list_roles_by_user_id(user_id)
+            return [role.name for role in roles]
+        except Exception as e:
+            self.logger.error(f"根据用户ID获取角色名称列表失败: {str(e)}", exc_info=True)
+            return []
+
     async def list_permissions_by_user_id(self, user_id: int) -> Set[str]:
         """
         根据用户ID查询权限码集合

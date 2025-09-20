@@ -9,9 +9,10 @@ WebSocket 路由控制器
 from fastapi import WebSocket, WebSocketDisconnect, Query, status
 from fastapi.routing import APIRouter
 import json
-import logging
 
-logger = logging.getLogger(__name__)
+from apps.common.config.logging import get_logger
+
+logger = get_logger(__name__)
 
 # 创建WebSocket路由
 websocket_router = APIRouter()
@@ -38,12 +39,16 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
             username = payload.get("username")
 
             if not user_id:
-                await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
+                await websocket.close(
+                    code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
+                )
                 return
 
         except Exception as e:
             logger.warning(f"WebSocket authentication failed: {e}")
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication failed")
+            await websocket.close(
+                code=status.WS_1008_POLICY_VIOLATION, reason="Authentication failed"
+            )
             return
 
         # 建立连接
@@ -55,7 +60,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 "type": "connection",
                 "status": "connected",
                 "message": f"Welcome {username}!",
-                "timestamp": jwt_utils.get_current_timestamp()
+                "timestamp": jwt_utils.get_current_timestamp(),
             }
             await websocket.send_text(json.dumps(welcome_message))
 
@@ -64,7 +69,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 try:
                     # 接收客户端消息
                     data = await websocket.receive_text()
-                    logger.debug(f"Received WebSocket message from user {user_id}: {data}")
+                    logger.debug(
+                        f"Received WebSocket message from user {user_id}: {data}"
+                    )
 
                     # 这里可以处理客户端发送的消息
                     # 比如心跳包、状态更新等
@@ -76,7 +83,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                             # 响应心跳包
                             pong_message = {
                                 "type": "pong",
-                                "timestamp": jwt_utils.get_current_timestamp()
+                                "timestamp": jwt_utils.get_current_timestamp(),
                             }
                             await websocket.send_text(json.dumps(pong_message))
 
@@ -87,7 +94,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 except WebSocketDisconnect:
                     break
                 except Exception as e:
-                    logger.error(f"Error handling WebSocket message from user {user_id}: {e}")
+                    logger.error(
+                        f"Error handling WebSocket message from user {user_id}: {e}"
+                    )
                     break
 
         except WebSocketDisconnect:
@@ -101,7 +110,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     except Exception as e:
         logger.error(f"WebSocket endpoint error: {e}")
         try:
-            await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Internal server error")
+            await websocket.close(
+                code=status.WS_1011_INTERNAL_ERROR, reason="Internal server error"
+            )
         except:
             pass
 
@@ -127,5 +138,5 @@ async def get_websocket_status():
     return {
         "status": "active",
         "online_stats": WebSocketUtils.get_online_count(),
-        "timestamp": jwt_utils.get_current_timestamp()
+        "timestamp": jwt_utils.get_current_timestamp(),
     }

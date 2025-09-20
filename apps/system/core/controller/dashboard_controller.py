@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 仪表盘 API
-
-@author: continew-admin
-@since: 2023/1/22 21:48
 """
 
 from fastapi import APIRouter

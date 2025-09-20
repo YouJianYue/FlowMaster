@@ -44,6 +44,10 @@ class RoleController(BaseController):
         self.user_role_service = get_user_role_service()  # 对应 private final UserRoleService userRoleService;
         self.menu_service = get_menu_service()  # 对应 private final MenuService menuService;
 
+        # 使用统一的日志配置
+        from apps.common.config.logging.logging_config import get_logger
+        self.logger = get_logger(f"system.{self.__class__.__name__}")
+
         # 调用父类构造函数 - 对应继承 BaseController
         super().__init__(self.role_service)
 
@@ -92,11 +96,20 @@ class RoleController(BaseController):
             return None
 
         # 查询角色关联的菜单ID
-        from apps.system.core.service.user_role_service import get_user_role_service
-        user_role_service = get_user_role_service()
+        from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
+        from sqlalchemy import select
+        from apps.common.config.database.database_session import DatabaseSession
 
-        # TODO: 这里需要实现获取角色菜单关联的方法
-        menu_ids = []  # 暂时返回空列表
+        # 获取数据库会话并查询角色菜单关联
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 查询角色关联的菜单ID列表
+                stmt = select(RoleMenuEntity.menu_id).where(RoleMenuEntity.role_id == entity_id)
+                result = await session.execute(stmt)
+                menu_ids = [row[0] for row in result.fetchall()]
+        except Exception as e:
+            self.logger.warning(f"查询角色菜单关联失败: {e}")
+            menu_ids = []  # 失败时返回空列表
 
         # 转换为详情响应模型
         role_detail = RoleDetailResp(
@@ -111,6 +124,7 @@ class RoleController(BaseController):
             dept_check_strictly=False,  # TODO: 从角色扩展信息获取
             menu_ids=menu_ids,
             dept_ids=[],  # TODO: 从角色部门关联获取
+            disabled=role.is_system,  # 系统内置角色不可操作
             create_user_string="超级管理员",
             create_time=role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,
             update_user_string=None,
@@ -326,7 +340,7 @@ async def list_permission_tree():
                 parent_id=str(node.get("parentId", "0")),
                 type=node.get("type", 1),
                 permission=node.get("permission", ""),
-                children=convert_to_permission_resp(node.get("children", [])) if node.get("children") else None,
+                children=convert_to_permission_resp(node.get("children", [])) if node.get("children") else [],
                 permissions=[],
                 is_checked=False
             )

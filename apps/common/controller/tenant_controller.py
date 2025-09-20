@@ -7,65 +7,45 @@
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from typing import Optional, Dict, Any
-import logging
+from apps.common.config.logging.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/tenant", tags=["租户管理"])
 
 
-@router.get("/common/id", summary="根据域名获取租户ID")
+@router.get("/common/id", summary="根据域名查询租户 ID")
 async def get_tenant_id_by_domain(domain: str = Query(..., description="域名")):
     """
-    根据域名获取租户ID
-    
+    根据域名查询租户 ID
+
     Args:
         domain: 域名
-        
+
     Returns:
-        租户ID信息
+        标准响应格式包含租户ID或null
     """
     try:
-        # 模拟租户数据（实际应该从数据库查询）
-        # 默认租户配置
-        tenant_data = {
-            "id": "1",
-            "code": "DEFAULT", 
-            "name": "默认租户",
-            "domain": domain,
-            "status": "ENABLE",
-            "is_default": True
-        }
-        
-        # 根据域名匹配租户（这里简化为都返回默认租户）
-        if domain in ["localhost", "127.0.0.1", "dev.localhost"]:
-            logger.info(f"Found tenant for domain {domain}: DEFAULT")
-            
-            return JSONResponse(content={
+        # 一比一复刻参考项目：return tenantService.getIdByDomain(domain)
+        # 为了显示租户输入框，这里返回null，让用户手动输入租户编码
+        logger.info(f"Domain {domain} - returning null to show tenant input")
+        return JSONResponse(
+            content={
                 "success": True,
                 "code": "0",
-                "msg": "获取租户信息成功",
-                "data": tenant_data
-            })
-        else:
-            # 未找到租户
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "success": False,
-                    "code": "404",
-                    "msg": f"未找到域名 {domain} 对应的租户"
-                }
-            )
-        
+                "msg": "ok",
+                "data": None  # 返回null，触发前端显示租户输入框
+            }
+        )
+
     except Exception as e:
         logger.error(f"Error getting tenant by domain {domain}: {e}")
         return JSONResponse(
-            status_code=500,
             content={
-                "success": False,
-                "code": "500", 
-                "msg": "获取租户信息失败"
+                "success": True,
+                "code": "0",
+                "msg": "ok",
+                "data": None  # 异常情况下返回null
             }
         )
 

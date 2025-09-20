@@ -9,9 +9,10 @@ WebSocket 管理器
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, List
 import json
-import logging
 
-logger = logging.getLogger(__name__)
+from apps.common.config.logging.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class WebSocketManager:

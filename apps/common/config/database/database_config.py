@@ -8,7 +8,6 @@ from typing import Dict, Any, Optional
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
 import os
 
 
@@ -114,7 +113,7 @@ class DatabaseConfig(BaseSettings):
         }
 
         # SQLite 不支持连接池相关参数
-        if not 'sqlite' in self.url:
+        if 'sqlite' not in self.url:
             engine_kwargs.update({
                 "pool_size": self.pool_size,
                 "max_overflow": self.max_overflow,

@@ -5,35 +5,42 @@
 """
 
 # 导入数据库基类
-from apps.common.config.database.database_config import Base
+from apps.common.base.model.entity.base_entity import Base
 
 # ==========================================
 # 导入所有实体类，确保它们被SQLAlchemy识别
 # ==========================================
 
 # 基础实体类（必须最先导入）
-from apps.common.base.model.entity.base_entity import BaseEntity
-from apps.common.base.model.entity.base_create_entity import BaseCreateEntity  
-from apps.common.base.model.entity.base_update_entity import BaseUpdateEntity
-from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 
 # 认证模块实体类
-from apps.system.auth.model.entity.login_log_entity import LoginLogEntity
-from apps.system.auth.model.entity.user_social_entity import UserSocialEntity
 
 # 系统核心模块实体类
-try:
-    from apps.system.core.model.entity.user_entity import UserEntity
-    from apps.system.core.model.entity.role_entity import RoleEntity
-    from apps.system.core.model.entity.menu_entity import MenuEntity
-    from apps.system.core.model.entity.dept_entity import DeptEntity
-    from apps.system.core.model.entity.user_role_entity import UserRoleEntity
-    from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
-    from apps.system.core.model.entity.role_dept_entity import RoleDeptEntity
-    from apps.system.core.model.entity.client_entity import ClientEntity
-except ImportError as e:
-    # 如果某些实体类不存在，跳过（开发阶段可能未完成）
-    print(f"Warning: Some entity classes not found: {e}")
+# 核心业务表（12个）
+from apps.system.core.model.entity.user_entity import UserEntity
+from apps.system.core.model.entity.role_entity import RoleEntity
+from apps.system.core.model.entity.menu_entity import MenuEntity
+from apps.system.core.model.entity.dept_entity import DeptEntity
+from apps.system.core.model.entity.user_role_entity import UserRoleEntity
+from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
+from apps.system.core.model.entity.role_dept_entity import RoleDeptEntity
+from apps.system.core.model.entity.client_entity import ClientEntity
+from apps.system.core.model.entity.option_entity import OptionEntity
+from apps.system.core.model.entity.dict_entity import DictEntity
+from apps.system.core.model.entity.dict_item_entity import DictItemEntity
+from apps.system.core.model.entity.storage_entity import StorageEntity
+
+# 扩展功能表（10个）
+from apps.system.core.model.entity.user_password_history_entity import UserPasswordHistoryEntity
+from apps.system.core.model.entity.user_social_entity import UserSocialEntity
+from apps.system.core.model.entity.log_entity import LogEntity
+from apps.system.core.model.entity.message_entity import MessageEntity
+from apps.system.core.model.entity.message_log_entity import MessageLogEntity
+from apps.system.core.model.entity.notice_entity import NoticeEntity
+from apps.system.core.model.entity.notice_log_entity import NoticeLogEntity
+from apps.system.core.model.entity.file_entity import FileEntity
+from apps.system.core.model.entity.sms_config_entity import SmsConfigEntity
+from apps.system.core.model.entity.sms_log_entity import SmsLogEntity
 
 # ==========================================
 # 收集所有已注册的模型
@@ -56,16 +63,16 @@ def get_all_models():
 
 def print_registered_models():
     """打印所有已注册的模型信息"""
-    models = get_all_models()
+    _models = get_all_models()
     
-    print("\n📋 已注册的数据库模型:")
-    print("-" * 60)
-    for i, model in enumerate(models, 1):
-        print(f"{i:2d}. {model['name']:<20} -> {model['table_name']}")
-    print("-" * 60)
-    print(f"总计: {len(models)} 个模型")
+    # print("\n📋 已注册的数据库模型:")
+    # print("-" * 60)
+    # for i, model in enumerate(models, 1):
+    #     print(f"{i:2d}. {model['name']:<20} -> {model['table_name']}")
+    # print("-" * 60)
+    print(f"Total: {len(_models)} models")
     
-    return models
+    return _models
 
 def get_table_names():
     """获取所有表名列表"""
@@ -91,15 +98,15 @@ def validate_models():
         # 检查是否继承自正确的基类
         base_classes = [cls.__name__ for cls in model_class.__mro__]
         if 'BaseEntity' not in base_classes and 'Base' not in base_classes:
-            issues.append(f"{model['name']}: 未继承 BaseEntity 或 Base")
+            issues.append(f"{model['name']}: Does not inherit BaseEntity or Base")
     
     if issues:
-        print("\n⚠️  模型定义问题:")
+        print("\nModel definition issues:")
         for issue in issues:
             print(f"  - {issue}")
         return False
     else:
-        print("\n✅ 所有模型定义正确")
+        print("\nAll model definitions are correct")
         return True
 
 # ==========================================
@@ -133,15 +140,15 @@ def get_model_statistics():
 
 if __name__ == "__main__":
     # 直接运行此文件可以查看模型注册情况
-    print("🔍 检查数据库模型注册情况...")
+    print("Checking database model registration...")
     
     models = print_registered_models()
     validate_models()
     
     stats = get_model_statistics()
-    print(f"\n📊 模型统计:")
-    print(f"  基础模型: {stats['base_models']} 个")
-    print(f"  认证模块: {stats['auth_models']} 个") 
-    print(f"  核心模块: {stats['core_models']} 个")
-    print(f"  其他模块: {stats['other_models']} 个")
-    print(f"  总计: {stats['total_models']} 个")
+    print("\nModel statistics:")
+    print(f"  Base models: {stats['base_models']}")
+    print(f"  Auth modules: {stats['auth_models']}")
+    print(f"  Core modules: {stats['core_models']}")
+    print(f"  Other modules: {stats['other_models']}")
+    print(f"  Total: {stats['total_models']}")

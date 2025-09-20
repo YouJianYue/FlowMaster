@@ -11,7 +11,6 @@ from apps.system.auth.service.auth_service_manager import get_auth_service
 from apps.system.auth.model.req.login_req import LoginRequestUnion, RefreshTokenReq, SocialLoginReq
 from apps.system.auth.model.resp.auth_resp import LoginResp, RefreshTokenResp, SocialAuthAuthorizeResp
 from apps.system.auth.model.resp.user_info_resp import UserInfoResp
-from apps.system.core.model.resp.route_resp import RouteResp
 from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.common.util.network_utils import NetworkUtils
 from apps.common.config.exception.global_exception_handler import BusinessException
@@ -108,8 +107,8 @@ async def refresh_token(request: RefreshTokenReq):
 @router.get("/user/info", response_model=ApiResponse[UserInfoResp], summary="获取当前用户信息")
 async def get_user_info():
     """
-    获取当前用户信息 - 🚨 关键修改：返回用户权限数据
-    解决菜单管理页面操作列不显示的问题
+    获取当前用户信息 - 一比一复刻参考项目的/auth/user/info接口
+    完全匹配UserInfoResp结构，包含所有必要字段
 
     Returns:
         ApiResponse[UserInfoResp]: 用户信息（包含权限列表）
@@ -120,26 +119,42 @@ async def get_user_info():
         raise HTTPException(status_code=401, detail="用户未登录")
 
     try:
-        # 导入角色服务 - 解决操作列显示问题的核心
+        # 导入必要的服务
+        from apps.system.core.service.user_service import get_user_service
         from apps.system.core.service.role_service import get_role_service
+        from datetime import datetime, date
+
+        user_service = get_user_service()
         role_service = get_role_service()
+
+        # 获取用户详细信息
+        user_detail = await user_service.get(user_context.id)
+        if not user_detail:
+            raise HTTPException(status_code=404, detail="用户不存在")
 
         # 获取用户权限和角色
         permissions = await role_service.list_permissions_by_user_id(user_context.id)
         role_codes = await role_service.get_role_codes_by_user_id(user_context.id)
+        role_names = await role_service.get_role_names_by_user_id(user_context.id)
 
-        # 构建用户信息响应 - 使用Pydantic模型自动处理字段转换
+        # 构建用户信息响应 - 完全匹配参考项目UserInfoResp结构
         user_info = UserInfoResp(
             id=user_context.id,
             username=user_context.username,
-            nickname=user_context.nickname or user_context.username,
-            gender=1,  # 默认值，后续从用户表获取
-            email=user_context.email or "",
-            phone=user_context.phone or "",
-            avatar=user_context.avatar or "",
-            dept_name="",  # 后续从部门关联获取
-            roles=list(role_codes),
-            permissions=list(permissions)  # 🚨 关键修改：返回用户权限列表
+            nickname=user_detail.nickname or user_context.username,
+            gender=user_detail.gender if hasattr(user_detail, 'gender') else 1,
+            email=user_detail.email or "",
+            phone=user_detail.phone or "",
+            avatar=user_detail.avatar or "",
+            description=user_detail.description if hasattr(user_detail, 'description') else "",
+            pwd_reset_time=user_detail.pwd_reset_time if hasattr(user_detail, 'pwd_reset_time') else None,
+            pwd_expired=user_context.is_password_expired,
+            registration_date=user_detail.create_time.date() if hasattr(user_detail, 'create_time') and user_detail.create_time else None,
+            dept_id=user_detail.dept_id if hasattr(user_detail, 'dept_id') else None,
+            dept_name=user_detail.dept_name if hasattr(user_detail, 'dept_name') else "",
+            permissions=set(permissions),
+            roles=set(role_codes),
+            role_names=list(role_names)
         )
 
         return create_success_response(data=user_info)
@@ -150,19 +165,21 @@ async def get_user_info():
         # 如果权限查询失败，返回基础用户信息（超级管理员给予所有权限）
         if user_context.id == 1:
             # 超级管理员给予所有基础权限
-            fallback_permissions = [
+            fallback_permissions = {
                 "system:user:list", "system:user:create", "system:user:update", "system:user:delete", "system:user:export", "system:user:import", "system:user:resetPwd", "system:user:updateRole",
                 "system:role:list", "system:role:create", "system:role:update", "system:role:delete", "system:role:updatePermission", "system:role:assign", "system:role:unassign",
                 "system:menu:list", "system:menu:create", "system:menu:update", "system:menu:delete", "system:menu:clearCache",
                 "system:dept:list", "system:dept:create", "system:dept:update", "system:dept:delete", "system:dept:export",
                 "system:notice:list", "system:notice:create", "system:notice:update", "system:notice:delete",
                 "system:file:list", "system:file:upload", "system:file:update", "system:file:delete", "system:file:download"
-            ]
-            fallback_role_codes = ["super_admin"]
+            }
+            fallback_role_codes = {"super_admin"}
+            fallback_role_names = ["超级管理员"]
         else:
             # 普通用户基础权限
-            fallback_permissions = ["system:user:list", "system:role:list", "system:menu:list", "system:dept:list"]
-            fallback_role_codes = ["user"]
+            fallback_permissions = {"system:user:list", "system:role:list", "system:menu:list", "system:dept:list"}
+            fallback_role_codes = {"user"}
+            fallback_role_names = ["普通用户"]
 
         user_info = UserInfoResp(
             id=user_context.id,
@@ -172,9 +189,15 @@ async def get_user_info():
             email=user_context.email or "",
             phone=user_context.phone or "",
             avatar=user_context.avatar or "",
+            description="",
+            pwd_reset_time=None,
+            pwd_expired=False,
+            registration_date=date.today(),
+            dept_id=None,
             dept_name="",
+            permissions=fallback_permissions,
             roles=fallback_role_codes,
-            permissions=fallback_permissions  # 🚨 关键修复：确保返回权限
+            role_names=fallback_role_names
         )
 
         return create_success_response(data=user_info)

@@ -6,9 +6,8 @@
 @since: 2025/9/18
 """
 
-from typing import List, Optional, TYPE_CHECKING
-from sqlalchemy import select, func, or_, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List, TYPE_CHECKING
+from sqlalchemy import select, func, and_
 
 from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.model.entity.user_role_entity import UserRoleEntity
@@ -17,7 +16,6 @@ from apps.system.core.model.entity.role_entity import RoleEntity
 from apps.common.config.logging import get_logger
 
 if TYPE_CHECKING:
-    from apps.system.core.model.resp.role_resp import RoleUserResp
     from apps.common.models.page_resp import PageResp
 
 
@@ -32,7 +30,7 @@ class UserRoleService:
     def __init__(self):
         self.logger = get_logger(self.__class__.__name__)
 
-    async def page_user(self, query, page_query) -> 'PageResp':
+    async def page_user(self, query, page_query) -> "PageResp":
         """
         分页查询角色关联的用户列表
 
@@ -51,13 +49,13 @@ class UserRoleService:
                 # 构建基础查询 - 查询用户角色关联信息
                 base_stmt = (
                     select(
-                        UserRoleEntity.id.label('user_role_id'),
-                        UserEntity.id.label('user_id'),
+                        UserRoleEntity.id.label("user_role_id"),
+                        UserEntity.id.label("user_id"),
                         UserEntity.username,
                         UserEntity.nickname,
                         UserEntity.email,
                         UserEntity.phone,
-                        UserEntity.create_time
+                        UserEntity.create_time,
                     )
                     .join(UserEntity, UserRoleEntity.user_id == UserEntity.id)
                     .where(UserRoleEntity.role_id == query.role_id)
@@ -65,11 +63,17 @@ class UserRoleService:
 
                 # 添加过滤条件
                 if query.username:
-                    base_stmt = base_stmt.where(UserEntity.username.like(f"%{query.username}%"))
+                    base_stmt = base_stmt.where(
+                        UserEntity.username.like(f"%{query.username}%")
+                    )
                 if query.nickname:
-                    base_stmt = base_stmt.where(UserEntity.nickname.like(f"%{query.nickname}%"))
+                    base_stmt = base_stmt.where(
+                        UserEntity.nickname.like(f"%{query.nickname}%")
+                    )
                 if query.phone:
-                    base_stmt = base_stmt.where(UserEntity.phone.like(f"%{query.phone}%"))
+                    base_stmt = base_stmt.where(
+                        UserEntity.phone.like(f"%{query.phone}%")
+                    )
 
                 # 统计总数
                 count_stmt = select(func.count()).select_from(base_stmt.subquery())
@@ -78,7 +82,11 @@ class UserRoleService:
 
                 # 分页查询
                 offset = (page_query.page - 1) * page_query.size
-                stmt = base_stmt.order_by(UserEntity.create_time.desc()).offset(offset).limit(page_query.size)
+                stmt = (
+                    base_stmt.order_by(UserEntity.create_time.desc())
+                    .offset(offset)
+                    .limit(page_query.size)
+                )
 
                 result = await session.execute(stmt)
                 users = result.all()
@@ -94,7 +102,9 @@ class UserRoleService:
                         email=user.email,
                         phone=user.phone,
                         dept_name="",  # TODO: 从部门表关联查询
-                        create_time=user.create_time.strftime("%Y-%m-%d %H:%M:%S") if user.create_time else None
+                        create_time=user.create_time.strftime("%Y-%m-%d %H:%M:%S")
+                        if user.create_time
+                        else None,
                     )
                     user_list.append(user_resp)
 
@@ -103,17 +113,13 @@ class UserRoleService:
                     total=total,
                     current=page_query.page,
                     size=page_query.size,
-                    pages=(total + page_query.size - 1) // page_query.size
+                    pages=(total + page_query.size - 1) // page_query.size,
                 )
 
         except Exception as e:
             self.logger.error(f"分页查询角色用户失败: {str(e)}", exc_info=True)
             return PageResp(
-                list=[],
-                total=0,
-                current=page_query.page,
-                size=page_query.size,
-                pages=0
+                list=[], total=0, current=page_query.page, size=page_query.size, pages=0
             )
 
     async def assign_users_to_role(self, role_id: int, user_ids: List[int]) -> bool:
@@ -152,11 +158,13 @@ class UserRoleService:
                 existing_stmt = select(UserRoleEntity.user_id).where(
                     and_(
                         UserRoleEntity.role_id == role_id,
-                        UserRoleEntity.user_id.in_(user_ids)
+                        UserRoleEntity.user_id.in_(user_ids),
                     )
                 )
                 existing_result = await session.execute(existing_stmt)
-                existing_user_ids = {user_id for user_id in existing_result.scalars().all()}
+                existing_user_ids = {
+                    user_id for user_id in existing_result.scalars().all()
+                }
 
                 # 过滤出需要新增的用户
                 new_user_ids = set(user_ids) - existing_user_ids
@@ -168,10 +176,7 @@ class UserRoleService:
                 # 批量创建用户角色关联
                 new_user_roles = []
                 for user_id in new_user_ids:
-                    user_role = UserRoleEntity(
-                        user_id=user_id,
-                        role_id=role_id
-                    )
+                    user_role = UserRoleEntity(user_id=user_id, role_id=role_id)
                     new_user_roles.append(user_role)
 
                 session.add_all(new_user_roles)
@@ -197,7 +202,9 @@ class UserRoleService:
         try:
             async with DatabaseSession.get_session_context() as session:
                 # 查询要删除的用户角色关联
-                stmt = select(UserRoleEntity).where(UserRoleEntity.id.in_(user_role_ids))
+                stmt = select(UserRoleEntity).where(
+                    UserRoleEntity.id.in_(user_role_ids)
+                )
                 result = await session.execute(stmt)
                 user_roles = result.scalars().all()
 
@@ -230,7 +237,9 @@ class UserRoleService:
         """
         try:
             async with DatabaseSession.get_session_context() as session:
-                stmt = select(UserRoleEntity.user_id).where(UserRoleEntity.role_id == role_id)
+                stmt = select(UserRoleEntity.user_id).where(
+                    UserRoleEntity.role_id == role_id
+                )
                 result = await session.execute(stmt)
                 user_ids = result.scalars().all()
 
@@ -252,7 +261,9 @@ class UserRoleService:
         """
         try:
             async with DatabaseSession.get_session_context() as session:
-                stmt = select(UserRoleEntity.role_id).where(UserRoleEntity.user_id == user_id)
+                stmt = select(UserRoleEntity.role_id).where(
+                    UserRoleEntity.user_id == user_id
+                )
                 result = await session.execute(stmt)
                 role_ids = result.scalars().all()
 
@@ -279,7 +290,7 @@ class UserRoleService:
                 stmt = select(UserRoleEntity).where(
                     and_(
                         UserRoleEntity.user_id == user_id,
-                        UserRoleEntity.role_id.in_(role_ids)
+                        UserRoleEntity.role_id.in_(role_ids),
                     )
                 )
                 result = await session.execute(stmt)
@@ -290,7 +301,9 @@ class UserRoleService:
 
                 await session.commit()
 
-                self.logger.info(f"成功删除用户 {user_id} 的 {len(user_roles)} 个角色关联")
+                self.logger.info(
+                    f"成功删除用户 {user_id} 的 {len(user_roles)} 个角色关联"
+                )
                 return True
 
         except Exception as e:
@@ -311,7 +324,9 @@ class UserRoleService:
         try:
             async with DatabaseSession.get_session_context() as session:
                 # 删除用户现有的所有角色关联
-                existing_stmt = select(UserRoleEntity).where(UserRoleEntity.user_id == user_id)
+                existing_stmt = select(UserRoleEntity).where(
+                    UserRoleEntity.user_id == user_id
+                )
                 existing_result = await session.execute(existing_stmt)
                 existing_user_roles = existing_result.scalars().all()
 
@@ -322,17 +337,16 @@ class UserRoleService:
                 if role_ids:
                     new_user_roles = []
                     for role_id in role_ids:
-                        user_role = UserRoleEntity(
-                            user_id=user_id,
-                            role_id=role_id
-                        )
+                        user_role = UserRoleEntity(user_id=user_id, role_id=role_id)
                         new_user_roles.append(user_role)
 
                     session.add_all(new_user_roles)
 
                 await session.commit()
 
-                self.logger.info(f"成功更新用户 {user_id} 的角色关联，新角色数量: {len(role_ids)}")
+                self.logger.info(
+                    f"成功更新用户 {user_id} 的角色关联，新角色数量: {len(role_ids)}"
+                )
                 return True
 
         except Exception as e:

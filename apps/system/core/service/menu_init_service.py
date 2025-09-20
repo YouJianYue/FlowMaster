@@ -5,13 +5,13 @@
 替换硬编码菜单数据，支持数据库初始化时自动导入菜单
 """
 
-import logging
 from typing import List, Dict, Any
 from sqlalchemy import select, func
 from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.model.entity.menu_entity import MenuEntity
+from apps.common.config.logging.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MenuInitService:

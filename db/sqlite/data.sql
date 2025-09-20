@@ -161,13 +161,13 @@ VALUES
 
 -- 初始化默认角色
 INSERT INTO sys_role
-(id, name, code, data_scope, description, sort, is_system, create_user, create_time)
+(id, name, code, data_scope, description, sort, is_system, menu_check_strictly, dept_check_strictly, create_user, create_time)
 VALUES
-(1, '超级管理员', 'super_admin', 'ALL', '系统初始角色', 0, 1, 1, datetime('now')),
-(2, '系统管理员', 'sys_admin', 'ALL', NULL, 1, 0, 1, datetime('now')),
-(3, '普通用户', 'general', 'SELF', NULL, 2, 0, 1, datetime('now')),
-(547888897925840927, '测试人员', 'tester', 'CUSTOM', NULL, 3, 0, 1, datetime('now')),
-(547888897925840928, '研发人员', 'developer', 'SELF', NULL, 4, 0, 1, datetime('now'));
+(1, '超级管理员', 'super_admin', 1, '系统初始角色', 0, 1, 1, 1, 1, datetime('now')),
+(2, '系统管理员', 'sys_admin', 1, NULL, 1, 0, 1, 1, 1, datetime('now')),
+(3, '普通用户', 'general', 4, NULL, 2, 0, 1, 1, 1, datetime('now')),
+(547888897925840927, '测试人员', 'tester', 5, NULL, 3, 0, 1, 1, 1, datetime('now')),
+(547888897925840928, '研发人员', 'developer', 4, NULL, 4, 0, 1, 1, 1, datetime('now'));
 
 -- 初始化默认用户：admin/admin123；test/test123
 INSERT INTO sys_user

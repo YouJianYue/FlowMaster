@@ -10,11 +10,11 @@
 @since 2024/8/7 20:21
 """
 
-import logging
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
+from apps.common.config.logging.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NotLoginException(Exception):

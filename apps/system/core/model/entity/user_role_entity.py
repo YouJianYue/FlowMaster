@@ -5,7 +5,7 @@
 """
 
 from sqlalchemy import Column, BigInteger, ForeignKey, Index, Integer
-from apps.common.config.database.database_session import Base
+from apps.common.base.model.entity.base_entity import Base
 
 
 class UserRoleEntity(Base):
@@ -45,16 +45,6 @@ class UserRoleEntity(Base):
         Index('idx_user_id', 'user_id'),  # 按用户查询角色
         Index('idx_role_id', 'role_id'),  # 按角色查询用户
     )
-
-    class Config:
-        """Pydantic配置"""
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "user_id": 1,
-                "role_id": 1
-            }
-        }
 
     def __repr__(self) -> str:
         return f"<UserRoleEntity(id={self.id}, user_id={self.user_id}, role_id={self.role_id})>"

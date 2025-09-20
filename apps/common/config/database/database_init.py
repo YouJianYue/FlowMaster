@@ -5,12 +5,12 @@
 """
 
 import asyncio
-import logging
 from sqlalchemy import text
 from apps.common.config.database.database_config import initialize_database_engine, database_config, Base
 from apps.common.config.database.database_session import DatabaseSession
+from apps.common.config.logging.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DatabaseInitializer:

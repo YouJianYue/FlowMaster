@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 消息服务接口
-
-@author: continew-admin
-@since: 2023/11/2 23:00
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import Optional
 
 from apps.system.core.model.resp.message_unread_resp import MessageUnreadResp
 

@@ -28,8 +28,10 @@ class RoleEntity(BaseEntity):
     # 角色编码（唯一）
     code: str = Column(String(32), nullable=False, unique=True, comment="角色编码")
     
-    # 数据权限范围 - 修改为字符串类型存储，避免序列化问题
-    data_scope: str = Column(String(20), nullable=False, default=DataScopeEnum.SELF.value, comment="数据权限范围")
+    # 数据权限范围 - 修改为整数类型，匹配参考项目MySQL结构
+    # 参考项目: data_scope tinyint(1) NOT NULL DEFAULT 4
+    # 1：全部数据权限；2：本部门及以下数据权限；3：本部门数据权限；4：仅本人数据权限；5：自定义数据权限
+    data_scope: int = Column(Integer, nullable=False, default=4, comment="数据权限范围")
     
     # 描述
     description: Optional[str] = Column(Text, nullable=True, comment="描述")

@@ -4,20 +4,20 @@
 菜单管理控制器
 """
 
-import logging
-from typing import List, Dict, Any, Union
-from fastapi import APIRouter, Depends, HTTPException, Body, Path
+from typing import List, Dict, Any
+from fastapi import APIRouter, HTTPException, Body, Path
 from sqlalchemy import select
 from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.system.core.service.impl.menu_service_impl import menu_service
-from apps.system.core.model.req.menu_req import MenuReq, MenuQuery
+from apps.system.core.model.req.menu_req import MenuReq
 from apps.system.core.model.resp.menu_resp import MenuResp
 from apps.common.models.req.common_status_update_req import CommonStatusUpdateReq
 from apps.common.context.user_context_holder import UserContextHolder
 from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.model.entity.menu_entity import MenuEntity
+from apps.common.config.logging.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/system/menu", tags=["菜单管理"])
 

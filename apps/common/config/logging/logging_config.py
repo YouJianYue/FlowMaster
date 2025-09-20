@@ -4,12 +4,10 @@
 日志配置模块
 """
 
-import os
 import sys
 import logging
 import logging.handlers
 from pathlib import Path
-from typing import Dict, Any
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 仪表盘服务接口
-
-@author: continew-admin
-@since: 2023/1/22 21:48
 """
 
 from abc import ABC, abstractmethod

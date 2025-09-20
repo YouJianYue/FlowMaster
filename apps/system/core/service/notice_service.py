@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 通知服务接口
-
-@author: continew-admin
 @since: 2025/5/8 21:18
 """
 
