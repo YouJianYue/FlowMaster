@@ -9,7 +9,7 @@
 @since: 2025/9/18
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from fastapi import APIRouter, Path, Body, Depends, HTTPException
 from apps.common.base.controller.base_controller import BaseController, PageQuery, SortQuery, IdsReq
 from apps.common.middleware.permission_middleware import require_permission
@@ -53,16 +53,11 @@ class RoleController(BaseController):
 
     # ==================== BaseController方法适配 ====================
 
-    async def page(self, query, page_query):
+    async def page(self, query: RoleQuery, page_query: PageQuery):
         """适配分页查询到角色服务"""
-        # 构建过滤条件
-        filters = {}
-        if hasattr(query, 'name') and query.name:
-            filters['name'] = query.name
-        if hasattr(query, 'code') and query.code:
-            filters['code'] = query.code
-        if hasattr(query, 'description') and query.description:
-            filters['description'] = query.description
+        # 使用Pydantic的get_filters方法，提供类型安全的过滤
+        # query现在有完整的类型提示：RoleQuery
+        filters = query.get_filters()
 
         return await self.role_service.list_roles_with_pagination(
             page=page_query.page,
@@ -70,16 +65,11 @@ class RoleController(BaseController):
             **filters
         )
 
-    async def list(self, query, sort_query):
+    async def list(self, query: RoleQuery, sort_query: SortQuery):
         """适配列表查询到角色服务"""
-        # 构建过滤条件
-        filters = {}
-        if hasattr(query, 'name') and query.name:
-            filters['name'] = query.name
-        if hasattr(query, 'code') and query.code:
-            filters['code'] = query.code
-        if hasattr(query, 'description') and query.description:
-            filters['description'] = query.description
+        # 使用Pydantic的get_filters方法，提供类型安全的过滤
+        # query现在有完整的类型提示：RoleQuery
+        filters = query.get_filters()
 
         # 添加排序条件
         if hasattr(sort_query, 'sort') and sort_query.sort:
@@ -87,7 +77,7 @@ class RoleController(BaseController):
 
         return await self.role_service.list_simple_roles(**filters)
 
-    async def get(self, entity_id: int):
+    async def get(self, entity_id: Union[int, str]):
         """适配详情查询到角色服务"""
         from apps.system.core.model.resp.role_resp import RoleDetailResp
 
@@ -104,10 +94,10 @@ class RoleController(BaseController):
         try:
             async with DatabaseSession.get_session_context() as session:
                 # 查询角色关联的菜单ID列表
-                stmt = select(RoleMenuEntity.menu_id).where(RoleMenuEntity.role_id == entity_id)
+                stmt = select(RoleMenuEntity.menu_id).where(RoleMenuEntity.role_id == int(entity_id))
                 result = await session.execute(stmt)
                 menu_ids = [row[0] for row in result.fetchall()]
-        except Exception as e:
+        except (Exception,) as e:
             self.logger.warning(f"查询角色菜单关联失败: {e}")
             menu_ids = []  # 失败时返回空列表
 
@@ -155,10 +145,10 @@ class RoleController(BaseController):
 
         return IdResp(id=role.id)
 
-    async def update(self, req, entity_id: int):
+    async def update(self, req, entity_id: Union[int, str]):
         """适配更新到角色服务"""
         success = await self.role_service.update_role(
-            role_id=entity_id,
+            role_id=int(entity_id),
             name=req.name,
             code=req.code,
             description=req.description,
@@ -176,16 +166,11 @@ class RoleController(BaseController):
         if not success:
             raise HTTPException(status_code=400, detail="删除角色失败")
 
-    async def dict(self, query, sort_query):
+    async def dict(self, query: RoleQuery, sort_query: SortQuery):
         """适配字典查询到角色服务"""
-        # 构建过滤条件
-        filters = {}
-        if hasattr(query, 'name') and query.name:
-            filters['name'] = query.name
-        if hasattr(query, 'code') and query.code:
-            filters['code'] = query.code
-        if hasattr(query, 'description') and query.description:
-            filters['description'] = query.description
+        # 使用Pydantic的get_filters方法，提供类型安全的过滤
+        # query现在有完整的类型提示：RoleQuery
+        filters = query.get_filters()
 
         # 添加排序条件
         if hasattr(sort_query, 'sort') and sort_query.sort:
@@ -200,7 +185,7 @@ role_controller = RoleController()
 
 # ==================== @CrudRequestMapping 标准接口 ====================
 
-@router.get("", response_model=ApiResponse[PageResp[RoleResp]], summary="分页查询角色列表")
+@router.get("", summary="分页查询角色列表")
 @require_permission("system:role:list")
 async def page(
         query: RoleQuery = Depends(),
@@ -234,7 +219,7 @@ async def list_roles(
 
 @router.get("/{role_id}", response_model=ApiResponse[RoleDetailResp], summary="查询角色详情")
 @require_permission("system:role:list")
-async def get_role(role_id: int = Path(..., description="ID", example=1)):
+async def get_role(role_id: Union[int, str] = Path(..., description="ID", example="1")):
     """
     查询角色详情
 
@@ -259,10 +244,10 @@ async def create_role(req: RoleReq = Body(...)):
     return create_success_response(data=result.model_dump())
 
 
-@router.put("/{role_id}", response_model=ApiResponse[None], summary="修改角色")
+@router.put("/{role_id}", response_model=ApiResponse, summary="修改角色")
 @require_permission("system:role:update")
 async def update_role(
-        role_id: int = Path(..., description="ID", example=1),
+        role_id: Union[int, str] = Path(..., description="ID", example="1"),
         req: RoleReq = Body(...)
 ):
     """
@@ -275,7 +260,7 @@ async def update_role(
     return create_success_response(data=None)
 
 
-@router.delete("", response_model=ApiResponse[None], summary="批量删除角色")
+@router.delete("", response_model=ApiResponse, summary="批量删除角色")
 @require_permission("system:role:delete")
 async def batch_delete_roles(req: IdsReq = Body(...)):
     """
@@ -326,7 +311,7 @@ async def list_permission_tree():
     try:
         # 尝试调用菜单服务的权限树方法
         tree_list = await role_controller.menu_service.get_permission_tree()
-    except AttributeError:
+    except (AttributeError,):
         # 如果方法不存在，返回空列表
         tree_list = []
 
@@ -351,10 +336,10 @@ async def list_permission_tree():
     return create_success_response(data=formatted_tree)
 
 
-@router.put("/{role_id}/permission", response_model=ApiResponse[None], summary="修改权限")
+@router.put("/{role_id}/permission", response_model=ApiResponse, summary="修改权限")
 @require_permission("system:role:updatePermission")
 async def update_permission(
-        role_id: int = Path(..., description="ID", example=1),
+        role_id: Union[int, str] = Path(..., description="ID", example="1"),
         req: RolePermissionUpdateReq = Body(...)
 ):
     """
@@ -367,7 +352,7 @@ async def update_permission(
     public void updatePermission(@PathVariable("id") Long id, @RequestBody @Valid RolePermissionUpdateReq req)
     """
     success = await role_controller.role_service.update_permission(
-        role_id,
+        int(role_id),
         req.menu_ids,
         req.menu_check_strictly
     )
@@ -381,7 +366,7 @@ async def update_permission(
 @router.get("/{role_id}/user", response_model=ApiResponse[PageResp[RoleUserResp]], summary="分页查询关联用户")
 @require_permission("system:role:list")
 async def page_user(
-        role_id: int = Path(..., description="ID", example=1),
+        role_id: Union[int, str] = Path(..., description="ID", example="1"),
         query: RoleUserQuery = Depends(),
         page_query: PageQuery = Depends()
 ):
@@ -395,15 +380,15 @@ async def page_user(
     public BasePageResp<RoleUserResp> pageUser(@PathVariable("id") Long id, @Valid RoleUserQuery query, @Valid PageQuery pageQuery)
     """
     # 设置角色ID到查询条件
-    query.role_id = role_id
+    query.role_id = int(role_id)
     result = await role_controller.user_role_service.page_user(query, page_query)
     return create_success_response(data=result)
 
 
-@router.post("/{role_id}/user", response_model=ApiResponse[None], summary="分配用户")
+@router.post("/{role_id}/user", response_model=ApiResponse, summary="分配用户")
 @require_permission("system:role:assign")
 async def assign_to_users(
-        role_id: int = Path(..., description="ID", example=1),
+        role_id: Union[int, str] = Path(..., description="ID", example="1"),
         user_ids: List[int] = Body(..., description="用户ID列表", example=[1, 2, 3])
 ):
     """
@@ -418,14 +403,14 @@ async def assign_to_users(
     if not user_ids:
         raise HTTPException(status_code=400, detail="用户ID列表不能为空")
 
-    success = await role_controller.role_service.assign_to_users(role_id, user_ids)
+    success = await role_controller.role_service.assign_to_users(int(role_id), user_ids)
     if not success:
         raise HTTPException(status_code=400, detail="分配用户失败")
 
     return create_success_response(data=None)
 
 
-@router.delete("/user", response_model=ApiResponse[None], summary="取消分配用户")
+@router.delete("/user", response_model=ApiResponse, summary="取消分配用户")
 @require_permission("system:role:unassign")
 async def unassign_from_users(
         user_role_ids: List[int] = Body(..., description="用户角色关联ID列表", example=[1, 2, 3])):
@@ -450,7 +435,7 @@ async def unassign_from_users(
 
 @router.get("/{role_id}/user/id", response_model=ApiResponse[List[int]], summary="查询关联用户ID")
 @require_permission("system:role:list")
-async def list_user_id(role_id: int = Path(..., description="ID", example=1)):
+async def list_user_id(role_id: Union[int, str] = Path(..., description="ID", example="1")):
     """
     查询关联用户ID
 
@@ -460,5 +445,5 @@ async def list_user_id(role_id: int = Path(..., description="ID", example=1)):
     @GetMapping("/{id}/user/id")
     public List<Long> listUserId(@PathVariable("id") Long id)
     """
-    result = await role_controller.user_role_service.list_user_id_by_role_id(role_id)
+    result = await role_controller.user_role_service.list_user_id_by_role_id(int(role_id))
     return create_success_response(data=result)

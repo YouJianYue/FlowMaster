@@ -5,9 +5,9 @@
 """
 
 from typing import Dict, Any
-from fastapi import HTTPException, status
 from apps.system.auth.handler.abstract_login_handler import AbstractLoginHandler
 from apps.system.auth.enums.auth_enums import AuthTypeEnum
+from apps.common.config.exception.global_exception_handler import BadRequestException, BusinessException
 from apps.system.auth.model.req.login_req import AccountLoginReq
 from apps.system.auth.model.resp.auth_resp import LoginResp
 from apps.system.auth.config.jwt_config import password_config
@@ -57,17 +57,14 @@ class AccountLoginHandler(AbstractLoginHandler):
 
             return login_resp
 
-        except HTTPException:
-            # 记录登录失败日志
+        except BadRequestException:
+            # 业务异常(如验证码错误)直接向上抛出
             await self._log_login_failure(request.username, "认证失败", extra_info)
             raise
         except Exception as e:
             # 记录登录失败日志
             await self._log_login_failure(request.username, str(e), extra_info)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"登录失败: {str(e)}"
-            )
+            raise BusinessException(f"登录失败: {str(e)}")
 
     async def _authenticate_user(self, username: str, password: str) -> 'UserEntity':
         """
@@ -88,17 +85,11 @@ class AccountLoginHandler(AbstractLoginHandler):
         user = await self._get_user_by_username(username)
 
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
-            )
+            raise BadRequestException("用户名或密码错误")
 
         # 验证密码
         if not password_config.verify_password(plain_password, user.password):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
-            )
+            raise BadRequestException("用户名或密码错误")
 
         return user
 
@@ -136,10 +127,7 @@ class AccountLoginHandler(AbstractLoginHandler):
 
         client_id = client_info.get('client_id')
         if not client_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="缺少客户端ID"
-            )
+            raise BadRequestException("缺少客户端ID")
 
         async with DatabaseSession.get_session_context() as session:
             stmt = select(ClientEntity).where(ClientEntity.client_id == client_id)
@@ -147,10 +135,7 @@ class AccountLoginHandler(AbstractLoginHandler):
             client = result.scalar_one_or_none()
 
             if not client:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="客户端不存在"
-                )
+                raise BadRequestException("客户端不存在")
 
             # 检查客户端状态
             if not client.is_enabled():
@@ -195,10 +180,7 @@ class AccountLoginHandler(AbstractLoginHandler):
                 return password
 
             # 如果不像明文密码，抛出异常
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="密码解密失败，请检查密码格式"
-            )
+            raise BadRequestException("密码解密失败，请检查密码格式")
 
     async def _log_login_failure(self, username: str, reason: str, extra_info: Dict[str, Any]):
         """记录登录失败日志"""

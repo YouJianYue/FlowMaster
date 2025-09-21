@@ -80,11 +80,7 @@ async def lifespan(_app: FastAPI):
         if not RsaProperties.PRIVATE_KEY or not RsaProperties.PUBLIC_KEY:
             logger.warning("RSA密钥未配置或加载失败！登录功能可能无法正常工作")
 
-        # 1. 初始化日志配置
-        logger.info("初始化日志配置...")
-        setup_logging()
-
-        # 2. 初始化数据库
+        # 1. 初始化数据库（日志配置已在main中设置）
         logger.info("初始化数据库...")
 
         # 注册数据库模型（确保所有模型被识别）
@@ -98,7 +94,7 @@ async def lifespan(_app: FastAPI):
         db_status = await check_db_status()
         logger.info(f"数据库状态: {db_status}")
 
-        # 3. 初始化基础数据（使用参考项目SQL文件）
+        # 2. 初始化基础数据（使用参考项目SQL文件）
         logger.info("初始化基础数据（使用参考项目SQL文件）...")
         try:
             db_init_service = DatabaseInitService()
@@ -218,10 +214,29 @@ async def root():
 
 
 if __name__ == "__main__":
+    import logging
+    from apps.common.config.logging import setup_logging, get_logger
+
+    # 1. 首先设置你自己的日志配置
+    setup_logging()
+    logger = get_logger("flowmaster.main")
+
+    # 2. 在启动 Uvicorn 前，关闭 Uvicorn 的日志输出
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.asgi").setLevel(logging.WARNING)
+
+    logger.info("🚀 FlowMaster 正在启动...")
+    logger.info(f"📡 监听地址: http://{app_config.app_host}:{app_config.app_port}")
+    logger.info(f"🔄 重载模式: {'开启' if app_config.app_reload else '关闭'}")
+
+    # 3. 启动 Uvicorn（关键：log_config=None 禁用其内部日志配置）
     uvicorn.run(
         "main:app",
         host=app_config.app_host,
         port=app_config.app_port,
         reload=app_config.app_reload,
-        log_level="info"
+        log_config=None,        # ⭐ 禁用 uvicorn 内部日志配置（最关键）
+        access_log=False,       # ⭐ 关闭访问日志（如HTTP请求）
     )

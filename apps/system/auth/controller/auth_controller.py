@@ -122,7 +122,6 @@ async def get_user_info():
         # 导入必要的服务
         from apps.system.core.service.user_service import get_user_service
         from apps.system.core.service.role_service import get_role_service
-        from datetime import datetime, date
 
         user_service = get_user_service()
         role_service = get_role_service()
@@ -139,19 +138,19 @@ async def get_user_info():
 
         # 构建用户信息响应 - 完全匹配参考项目UserInfoResp结构
         user_info = UserInfoResp(
-            id=user_context.id,
-            username=user_context.username,
-            nickname=user_detail.nickname or user_context.username,
-            gender=user_detail.gender if hasattr(user_detail, 'gender') else 1,
+            id=user_detail.id,
+            username=user_detail.username,
+            nickname=user_detail.nickname or user_detail.username,
+            gender=getattr(user_detail, 'gender', 1),
             email=user_detail.email or "",
             phone=user_detail.phone or "",
             avatar=user_detail.avatar or "",
-            description=user_detail.description if hasattr(user_detail, 'description') else "",
-            pwd_reset_time=user_detail.pwd_reset_time if hasattr(user_detail, 'pwd_reset_time') else None,
-            pwd_expired=user_context.is_password_expired,
-            registration_date=user_detail.create_time.date() if hasattr(user_detail, 'create_time') and user_detail.create_time else None,
-            dept_id=user_detail.dept_id if hasattr(user_detail, 'dept_id') else None,
-            dept_name=user_detail.dept_name if hasattr(user_detail, 'dept_name') else "",
+            description=getattr(user_detail, 'description', ""),
+            pwd_reset_time=getattr(user_detail, 'pwd_reset_time', None),
+            pwd_expired=getattr(user_detail, 'pwd_expired', False),
+            registration_date=user_detail.create_time.date() if user_detail.create_time else None,
+            dept_id=getattr(user_detail, 'dept_id', None),
+            dept_name=getattr(user_detail, 'dept_name', ""),
             permissions=set(permissions),
             roles=set(role_codes),
             role_names=list(role_names)
@@ -160,47 +159,7 @@ async def get_user_info():
         return create_success_response(data=user_info)
 
     except Exception as e:
-        print(f"权限查询失败，返回基础用户信息: {e}")
-
-        # 如果权限查询失败，返回基础用户信息（超级管理员给予所有权限）
-        if user_context.id == 1:
-            # 超级管理员给予所有基础权限
-            fallback_permissions = {
-                "system:user:list", "system:user:create", "system:user:update", "system:user:delete", "system:user:export", "system:user:import", "system:user:resetPwd", "system:user:updateRole",
-                "system:role:list", "system:role:create", "system:role:update", "system:role:delete", "system:role:updatePermission", "system:role:assign", "system:role:unassign",
-                "system:menu:list", "system:menu:create", "system:menu:update", "system:menu:delete", "system:menu:clearCache",
-                "system:dept:list", "system:dept:create", "system:dept:update", "system:dept:delete", "system:dept:export",
-                "system:notice:list", "system:notice:create", "system:notice:update", "system:notice:delete",
-                "system:file:list", "system:file:upload", "system:file:update", "system:file:delete", "system:file:download"
-            }
-            fallback_role_codes = {"super_admin"}
-            fallback_role_names = ["超级管理员"]
-        else:
-            # 普通用户基础权限
-            fallback_permissions = {"system:user:list", "system:role:list", "system:menu:list", "system:dept:list"}
-            fallback_role_codes = {"user"}
-            fallback_role_names = ["普通用户"]
-
-        user_info = UserInfoResp(
-            id=user_context.id,
-            username=user_context.username,
-            nickname=user_context.nickname or user_context.username,
-            gender=1,
-            email=user_context.email or "",
-            phone=user_context.phone or "",
-            avatar=user_context.avatar or "",
-            description="",
-            pwd_reset_time=None,
-            pwd_expired=False,
-            registration_date=date.today(),
-            dept_id=None,
-            dept_name="",
-            permissions=fallback_permissions,
-            roles=fallback_role_codes,
-            role_names=fallback_role_names
-        )
-
-        return create_success_response(data=user_info)
+        raise BusinessException(f"获取用户信息失败: {str(e)}")
 
 
 @router.get("/user/route", response_model=ApiResponse[List[Dict[str, Any]]], summary="获取用户路由")

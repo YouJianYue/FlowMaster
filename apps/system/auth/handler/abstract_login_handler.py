@@ -6,8 +6,9 @@
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from fastapi import HTTPException, status
+from fastapi import status
 from apps.system.auth.enums.auth_enums import AuthTypeEnum
+from apps.common.config.exception.global_exception_handler import BadRequestException, BusinessException
 from apps.system.auth.model.req.login_req import LoginReq
 from apps.system.auth.model.resp.auth_resp import LoginResp, UserInfoResp
 from apps.system.auth.config.jwt_config import jwt_utils
@@ -69,10 +70,7 @@ class AbstractLoginHandler(ABC):
 
         # 检查用户是否被禁用
         if user.status == DisEnableStatusEnum.DISABLE:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="此账号已被禁用，如有疑问，请联系管理员"
-            )
+            raise BadRequestException("此账号已被禁用，如有疑问，请联系管理员")
 
         # TODO: 添加部门状态检查（需要实现DeptService后）
         # CheckUtils.throwIfEqual(DisEnableStatusEnum.DISABLE, dept.getStatus(), "此账号所属部门已被禁用，如有疑问，请联系管理员");
@@ -141,10 +139,7 @@ class AbstractLoginHandler(ABC):
 
         # 确保必需字段不为空
         if not token_data.get('id') or not token_data.get('username'):
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="用户信息不完整"
-            )
+            raise BusinessException("用户信息不完整")
 
         # 处理集合字段
         token_data['permissions'] = list(user_context.permissions) if user_context.permissions else []
@@ -201,10 +196,7 @@ class AbstractLoginHandler(ABC):
             return
 
         if not hasattr(request, 'captcha') or not request.captcha:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="请输入验证码"
-            )
+            raise BadRequestException("请输入验证码")
 
         # 清理过期验证码
         current_time = datetime.now()
@@ -220,19 +212,13 @@ class AbstractLoginHandler(ABC):
 
         # 检查验证码UUID是否存在
         if captcha_key not in captcha_cache:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="验证码已过期或不存在，请重新获取"
-            )
+            raise BadRequestException("验证码已过期或不存在，请重新获取")
 
         cached_data = captcha_cache[captcha_key]
 
         # 验证验证码（忽略大小写）
         if request.captcha.lower() != cached_data['code']:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="验证码错误，请重新输入"
-            )
+            raise BadRequestException("验证码不正确")
 
         # 验证成功，删除验证码（一次性使用）
         del captcha_cache[captcha_key]

@@ -53,6 +53,18 @@ class RoleQuery(BaseModel):
         examples=["系统管理员"]
     )
 
+    def get_filters(self) -> dict:
+        """
+        获取非空过滤条件
+
+        使用Pydantic的model_dump方法，自动过滤None值
+        提供类型安全的过滤器构建
+
+        Returns:
+            dict: 非空的过滤条件字典
+        """
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
 
 class RoleUserQuery(BaseModel):
     """
@@ -102,3 +114,15 @@ class RoleUserQuery(BaseModel):
         description="手机号",
         examples=["13888888888"]
     )
+
+    def get_filters(self) -> dict:
+        """
+        获取非空过滤条件
+
+        使用Pydantic的model_dump方法，自动过滤None值
+        提供类型安全的过滤器构建
+
+        Returns:
+            dict: 非空的过滤条件字典
+        """
+        return {k: v for k, v in self.model_dump().items() if v is not None}

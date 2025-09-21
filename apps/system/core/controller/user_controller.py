@@ -3,26 +3,24 @@
 用户管理 API
 """
 
-from fastapi import APIRouter, Query, Path, HTTPException
+from fastapi import APIRouter, Query, Path
 from typing import Optional, Union
 
-from apps.common.models.api_response import ApiResponse, create_success_response
-from apps.common.models.page_resp import PageResp
-from apps.system.core.service.impl.user_service_impl import UserServiceImpl
+from apps.common.middleware.permission_middleware import require_permission
+from apps.common.models.api_response import create_success_response
+from apps.system.core.service.user_service import get_user_service
 from apps.system.core.model.req.user_req import UserUpdateReq
 from apps.system.core.model.req.user_role_update_req import UserRoleUpdateReq
-from apps.system.core.model.resp.user_resp import UserResp
-from apps.system.core.model.resp.user_detail_resp import UserDetailResp
-from apps.common.context.user_context_holder import UserContextHolder
 
 
 router = APIRouter(prefix="/system", tags=["用户管理 API"])
 
 # 服务实例
-user_service = UserServiceImpl()
+user_service = get_user_service()
 
 
-@router.get("/user", response_model=ApiResponse[PageResp[UserResp]], summary="分页查询用户列表", description="根据条件分页查询用户列表")
+@router.get("/user", summary="分页查询用户列表", description="根据条件分页查询用户列表")
+@require_permission("system:user:list")
 async def get_user_page(
     deptId: Optional[Union[int, str]] = Query(None, description="部门ID", example="1"),
     description: Optional[str] = Query(None, description="关键词（搜索用户名、昵称等）", example="Charles"),
@@ -43,7 +41,8 @@ async def get_user_page(
     return create_success_response(data=result)
 
 
-@router.get("/user/{user_id}", response_model=ApiResponse[UserDetailResp], summary="获取用户详情", description="根据用户ID获取用户详细信息")
+@router.get("/user/{user_id}", summary="获取用户详情", description="根据用户ID获取用户详细信息")
+@require_permission("system:user:list")
 async def get_user_detail(
     user_id: Union[int, str] = Path(..., description="用户ID", example="547889293968801834")
 ):
@@ -52,31 +51,23 @@ async def get_user_detail(
     return create_success_response(data=result)
 
 
-@router.put("/user/{user_id}", response_model=ApiResponse[bool], summary="修改用户", description="修改用户信息")
+@router.put("/user/{user_id}", summary="修改用户", description="修改用户信息")
+@require_permission("system:user:update")
 async def update_user(
     update_req: UserUpdateReq,  # JSON body参数放在前面
     user_id: Union[int, str] = Path(..., description="用户ID", example="547889293968801834")  # Path参数放在后面
 ):
     """修改用户"""
-    # 权限检查
-    user_context = UserContextHolder.get_context()
-    if not user_context or "system:user:update" not in user_context.permissions:
-        raise HTTPException(status_code=403, detail="Forbidden: Required permission 'system:user:update' is missing")
-
     await user_service.update_user(user_id, update_req)
     return create_success_response(data=True)
 
 
-@router.patch("/user/{user_id}/role", response_model=ApiResponse[bool], summary="分配角色", description="为用户新增或移除角色")
+@router.patch("/user/{user_id}/role", summary="分配角色", description="为用户新增或移除角色")
+@require_permission("system:user:updateRole")
 async def update_user_role(
     update_req: UserRoleUpdateReq,  # JSON body参数放在前面
     user_id: Union[int, str] = Path(..., description="用户ID", example="547889293968801834")  # Path参数放在后面
 ):
     """分配用户角色"""
-    # 权限检查
-    user_context = UserContextHolder.get_context()
-    if not user_context or "system:user:updateRole" not in user_context.permissions:
-        raise HTTPException(status_code=403, detail="Forbidden: Required permission 'system:user:updateRole' is missing")
-
     await user_service.update_role(update_req, user_id)
     return create_success_response(data=True)

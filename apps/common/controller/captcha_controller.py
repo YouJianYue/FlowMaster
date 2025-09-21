@@ -6,7 +6,8 @@
 
 import io
 import base64
-from fastapi import APIRouter, HTTPException
+import logging
+from fastapi import APIRouter
 from PIL import Image, ImageDraw, ImageFont
 import random
 import uuid as uuid_module
@@ -15,6 +16,7 @@ from datetime import datetime, timedelta
 from apps.common.config.captcha_properties import get_captcha_properties
 from apps.common.models.api_response import create_success_response
 from apps.common.config.logging.logging_config import get_logger
+from apps.common.config.exception.global_exception_handler import BusinessException, BadRequestException
 
 logger = get_logger(__name__)
 
@@ -90,7 +92,7 @@ class CaptchaGenerator:
                         font = ImageFont.truetype(font_path, font_size)
                         logger.debug(f"Successfully loaded font: {font_path}")
                         break
-                except Exception as e:
+                except (OSError, IOError, ImportError) as e:
                     logger.debug(f"Failed to load font {font_path}: {e}")
                     continue
 
@@ -151,9 +153,9 @@ class CaptchaGenerator:
 
             return img_buffer.getvalue()
 
-        except Exception as e:
+        except (OSError, IOError) as e:
             logger.error(f"Failed to create captcha image: {e}")
-            raise HTTPException(status_code=500, detail="验证码生成失败")
+            raise BusinessException("验证码生成失败")
 
 
 # 简单的内存缓存（生产环境应使用Redis）
@@ -216,9 +218,9 @@ async def generate_captcha():
         # 使用统一响应格式包装
         return create_success_response(data=captcha_data)
 
-    except Exception as e:
+    except (ValueError, KeyError, TypeError) as e:
         logger.error(f"Error generating captcha: {e}")
-        raise HTTPException(status_code=500, detail="验证码生成失败")
+        raise BusinessException("验证码生成失败")
 
 
 @router.get("/image", summary="获取图形验证码")
@@ -281,9 +283,9 @@ async def get_captcha_image():
         # 使用统一响应格式包装 (与项目其他接口保持一致)
         return create_success_response(data=captcha_data)
 
-    except Exception as e:
+    except (ValueError, KeyError, TypeError) as e:
         logger.error(f"Error generating captcha: {e}")
-        raise HTTPException(status_code=500, detail="验证码生成失败")
+        raise BusinessException("验证码生成失败")
 
 
 @router.post("/verify", summary="验证图形验证码")
@@ -305,28 +307,25 @@ async def verify_captcha(uuid: str, code: str):
         # 检查验证码是否存在
         captcha_key = f"captcha:{uuid}"  # 使用正确的缓存键格式
         if captcha_key not in captcha_cache:
-            raise HTTPException(
-                status_code=400,
-                detail="验证码已过期或不存在"
-            )
+            raise BadRequestException("验证码已过期或不存在")
 
         cached_data = captcha_cache[captcha_key]
 
         # 验证码（忽略大小写）
         if code.lower() != cached_data['code']:
-            raise HTTPException(
-                status_code=400,
-                detail="验证码错误"
-            )
+            raise BadRequestException("验证码不正确")
 
         # 验证成功，删除验证码（一次性使用）
         del captcha_cache[captcha_key]
 
         return create_success_response(data=True, message="验证成功")
 
-    except Exception as e:
+    except BadRequestException:
+        # 业务异常直接向上抛出
+        raise
+    except (KeyError, ValueError) as e:
         logger.error(f"Error verifying captcha: {e}")
-        raise HTTPException(status_code=500, detail="验证码校验失败")
+        raise BusinessException("验证码校验失败")
 
 
 @router.get("/status", summary="获取验证码状态")

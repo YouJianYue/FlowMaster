@@ -14,9 +14,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class LoggingConfig(BaseSettings):
     """日志配置类"""
-    
+
     level: str = Field(
-        default="INFO", 
+        default="INFO",
         description="日志级别"
     )
     file_path: str = Field(
@@ -38,6 +38,32 @@ class LoggingConfig(BaseSettings):
     date_format: str = Field(
         default="%Y-%m-%d %H:%M:%S",
         description="时间格式"
+    )
+
+    # 第三方库日志级别配置
+    sqlalchemy_level: str = Field(
+        default="ERROR",
+        description="SQLAlchemy日志级别"
+    )
+    aiosqlite_level: str = Field(
+        default="WARNING",
+        description="aiosqlite日志级别"
+    )
+    uvicorn_access_level: str = Field(
+        default="INFO",
+        description="Uvicorn访问日志级别"
+    )
+    uvicorn_error_level: str = Field(
+        default="INFO",
+        description="Uvicorn错误日志级别"
+    )
+    httpx_level: str = Field(
+        default="WARNING",
+        description="HTTPX日志级别"
+    )
+    asyncio_level: str = Field(
+        default="WARNING",
+        description="asyncio日志级别"
     )
     
     model_config = SettingsConfigDict(
@@ -112,8 +138,8 @@ class FlowMasterLogger:
                 "%(log_color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s",
                 datefmt=self.config.date_format,
                 log_colors={
-                    'DEBUG': 'cyan',
-                    'INFO': 'green',
+                    'DEBUG': 'blue',
+                    'INFO': 'red',
                     'WARNING': 'yellow',
                     'ERROR': 'red',
                     'CRITICAL': 'red,bg_white',
@@ -128,34 +154,65 @@ class FlowMasterLogger:
     
     def _configure_third_party_loggers(self):
         """配置第三方库的日志级别"""
-        # SQLAlchemy 日志 - 完全关闭SQL输出
-        logging.getLogger('sqlalchemy.engine').setLevel(logging.ERROR)
-        logging.getLogger('sqlalchemy.pool').setLevel(logging.ERROR)
-        logging.getLogger('sqlalchemy.dialects').setLevel(logging.ERROR)
+        # SQLAlchemy 日志 - 从配置读取级别
+        logging.getLogger('sqlalchemy.engine').setLevel(
+            getattr(logging, self.config.sqlalchemy_level.upper())
+        )
+        logging.getLogger('sqlalchemy.pool').setLevel(
+            getattr(logging, self.config.sqlalchemy_level.upper())
+        )
+        logging.getLogger('sqlalchemy.dialects').setLevel(
+            getattr(logging, self.config.sqlalchemy_level.upper())
+        )
 
-        # aiosqlite 日志 - 关闭DEBUG输出
-        logging.getLogger('aiosqlite').setLevel(logging.WARNING)
+        # aiosqlite 日志 - 从配置读取级别
+        logging.getLogger('aiosqlite').setLevel(
+            getattr(logging, self.config.aiosqlite_level.upper())
+        )
 
-        # FastAPI/Uvicorn 日志
-        logging.getLogger('uvicorn.access').setLevel(logging.INFO)
-        logging.getLogger('uvicorn.error').setLevel(logging.INFO)
+        # FastAPI/Uvicorn 日志 - 从配置读取级别，确保使用我们的格式
+        uvicorn_access_logger = logging.getLogger('uvicorn.access')
+        uvicorn_access_logger.setLevel(
+            getattr(logging, self.config.uvicorn_access_level.upper())
+        )
+        # 清除uvicorn.access的默认handlers，使用我们的
+        uvicorn_access_logger.handlers.clear()
+        uvicorn_access_logger.propagate = True  # 让它使用root logger的handlers
 
-        # HTTP 客户端日志
-        logging.getLogger('httpx').setLevel(logging.WARNING)
-        logging.getLogger('asyncio').setLevel(logging.WARNING)
+        uvicorn_error_logger = logging.getLogger('uvicorn.error')
+        uvicorn_error_logger.setLevel(
+            getattr(logging, self.config.uvicorn_error_level.upper())
+        )
+        # 清除uvicorn.error的默认handlers，使用我们的
+        uvicorn_error_logger.handlers.clear()
+        uvicorn_error_logger.propagate = True  # 让它使用root logger的handlers
+
+        # uvicorn主logger
+        uvicorn_logger = logging.getLogger('uvicorn')
+        uvicorn_logger.handlers.clear()
+        uvicorn_logger.propagate = True
+
+        # HTTP 客户端日志 - 从配置读取级别
+        logging.getLogger('httpx').setLevel(
+            getattr(logging, self.config.httpx_level.upper())
+        )
+        logging.getLogger('asyncio').setLevel(
+            getattr(logging, self.config.asyncio_level.upper())
+        )
     
-    def get_logger(self, name: str) -> logging.Logger:
+    @staticmethod
+    def get_logger(name: str) -> logging.Logger:
         """获取指定名称的logger"""
         return logging.getLogger(name)
     
     def get_request_logger(self) -> logging.Logger:
         """获取请求日志记录器"""
-        logger = logging.getLogger("flowmaster.request")
-        
+        request_logger = logging.getLogger("flowmaster.request")
+
         # 为请求日志创建单独的文件handler
-        if not any(isinstance(h, logging.handlers.RotatingFileHandler) 
-                  and 'request' in str(h.baseFilename) for h in logger.handlers):
-            
+        if not any(isinstance(h, logging.handlers.RotatingFileHandler)
+                  and 'request' in str(h.baseFilename) for h in request_logger.handlers):
+
             log_dir = Path(self.config.file_path)
             request_handler = logging.handlers.RotatingFileHandler(
                 filename=log_dir / "flowmaster_request.log",
@@ -163,24 +220,24 @@ class FlowMasterLogger:
                 backupCount=self.config.backup_count,
                 encoding='utf-8'
             )
-            
+
             request_formatter = logging.Formatter(
                 "%(asctime)s - %(levelname)s - %(message)s",
                 datefmt=self.config.date_format
             )
             request_handler.setFormatter(request_formatter)
-            logger.addHandler(request_handler)
-        
-        return logger
+            request_logger.addHandler(request_handler)
+
+        return request_logger
     
     def get_auth_logger(self) -> logging.Logger:
         """获取认证日志记录器"""
-        logger = logging.getLogger("flowmaster.auth")
-        
+        auth_logger = logging.getLogger("flowmaster.auth")
+
         # 为认证日志创建单独的文件handler
-        if not any(isinstance(h, logging.handlers.RotatingFileHandler) 
-                  and 'auth' in str(h.baseFilename) for h in logger.handlers):
-            
+        if not any(isinstance(h, logging.handlers.RotatingFileHandler)
+                  and 'auth' in str(h.baseFilename) for h in auth_logger.handlers):
+
             log_dir = Path(self.config.file_path)
             auth_handler = logging.handlers.RotatingFileHandler(
                 filename=log_dir / "flowmaster_auth.log",
@@ -188,15 +245,15 @@ class FlowMasterLogger:
                 backupCount=self.config.backup_count,
                 encoding='utf-8'
             )
-            
+
             auth_formatter = logging.Formatter(
                 "%(asctime)s - %(levelname)s - [%(funcName)s:%(lineno)d] - %(message)s",
                 datefmt=self.config.date_format
             )
             auth_handler.setFormatter(auth_formatter)
-            logger.addHandler(auth_handler)
-        
-        return logger
+            auth_logger.addHandler(auth_handler)
+
+        return auth_logger
 
 
 # 全局日志配置实例
@@ -207,7 +264,7 @@ logger_manager = FlowMasterLogger(logging_config)
 def get_logger(name: str = None) -> logging.Logger:
     """获取logger实例"""
     if name:
-        return logger_manager.get_logger(name)
+        return FlowMasterLogger.get_logger(name)
     else:
         return logging.getLogger("flowmaster")
 

@@ -5,7 +5,6 @@
 """
 
 from typing import Dict, Any, Optional, List
-from fastapi import HTTPException, status
 from apps.system.auth.handler.login_handler_factory import LoginHandlerFactory
 from apps.system.auth.enums.auth_enums import AuthTypeEnum
 from apps.system.auth.model.req.login_req import LoginRequestUnion, RefreshTokenReq, SocialLoginReq
@@ -15,7 +14,7 @@ from apps.common.context.user_context_holder import UserContextHolder
 from apps.system.core.service.client_service import ClientService
 from apps.system.core.service.menu_service import MenuService
 from apps.system.core.service.route_builder import RouteBuilder
-from apps.common.config.exception.global_exception_handler import BusinessException
+from apps.common.config.exception.global_exception_handler import BusinessException, BadRequestException
 
 
 class AuthService:
@@ -69,13 +68,11 @@ class AuthService:
         except BusinessException:
             # 客户端验证异常直接抛出
             raise
-        except HTTPException:
+        except BadRequestException:
+            # 业务异常(如验证码错误)直接抛出
             raise
         except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"登录处理失败: {str(e)}"
-            )
+            raise BusinessException(f"登录处理失败: {str(e)}")
     
     async def logout(self, token: str) -> bool:
         """
@@ -113,10 +110,7 @@ class AuthService:
             # 验证刷新令牌
             payload = jwt_utils.verify_refresh_token(request.refresh_token)
             if not payload:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="刷新令牌无效或已过期"
-                )
+                raise BadRequestException("刷新令牌无效或已过期")
             
             # 生成新的访问令牌
             user_id = payload.get("user_id")
@@ -132,13 +126,10 @@ class AuthService:
                 expires_in=jwt_utils.config.access_token_expire_minutes * 60
             )
             
-        except HTTPException:
+        except BadRequestException:
             raise
         except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"令牌刷新失败: {str(e)}"
-            )
+            raise BusinessException(f"令牌刷新失败: {str(e)}")
     
     async def get_current_user_info(self) -> Optional[Dict[str, Any]]:
         """
