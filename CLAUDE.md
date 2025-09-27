@@ -162,6 +162,40 @@
 - **✅ 统一异常处理**: 完全按照参考项目实现，HTTP 200 + 响应体错误码
 - **✅ 统一日志配置**: 环境变量驱动，支持第三方库日志级别配置
 
+## 🛠️ 数据库维护工具
+
+### MySQL布尔字段修复工具 🔧
+
+**位置**: `scripts/fix_mysql_boolean_fields.py`
+
+**问题背景**: MySQL的`bit(1)`和`TINYINT(1)`字段在SQLAlchemy中返回字节类型，导致布尔逻辑错误
+
+**解决方案**: 将所有布尔字段统一修改为标准的`BOOLEAN`类型
+
+**快速使用**:
+```bash
+# 方法1: 使用Python脚本
+source .venv/bin/activate
+python scripts/fix_mysql_boolean_fields.py
+
+# 方法2: 使用Shell脚本（带确认）
+./scripts/fix_boolean.sh
+```
+
+**修复的字段** (13个):
+- `sys_role`: is_system, menu_check_strictly, dept_check_strictly
+- `sys_menu`: is_external, is_cache, is_hidden
+- `sys_dept, sys_user, sys_dict`: is_system
+- `sys_notice`: is_timing, is_top
+- `sys_storage, sys_sms_config`: is_default
+
+**修复效果**:
+- ✅ 系统管理员角色可正常编辑权限
+- ✅ 布尔字段返回正确的整数类型(0/1)
+- ✅ 解决MySQL字节转换问题
+
+**详细文档**: 参见 `scripts/README.md`
+
 ## 🛠️ 技术实现要点
 
 ### Pydantic字段命名规范 🔥

@@ -67,7 +67,7 @@ from apps.common.config.app_config import app_config
 from apps.common.config.rsa_properties import RsaProperties
 
 # 导入数据库初始化服务
-from apps.common.config.database.database_init_service import DatabaseInitService
+# from apps.common.config.database.database_init_service import DatabaseInitService
 
 # 导入uvicorn（用于直接运行）
 import uvicorn
@@ -99,27 +99,27 @@ async def lifespan(_app: FastAPI):
         print_registered_models()
         validate_models()
 
-        # 初始化数据库表结构
-        await init_database()
+        # 注释掉数据库初始化，因为MySQL表里已经有数据了
+        # await init_database()
 
         # 检查数据库状态
         db_status = await check_db_status()
         logger.info(f"数据库状态: {db_status}")
 
-        # 3. 初始化基础数据（使用参考项目SQL文件）
-        logger.info("初始化基础数据（使用参考项目SQL文件）...")
-        try:
-            db_init_service = DatabaseInitService()
-            success = await db_init_service.init_database(force_reinit=False)
-
-            if success:
-                logger.info("基础数据初始化完成")
-                logger.info("权限体系数据已通过SQL文件初始化")
-            else:
-                logger.warning("基础数据初始化失败")
-        except Exception as init_error:
-            logger.warning(f"基础数据初始化失败: {init_error}")
-            # 不阻塞应用启动，继续运行
+        # 注释掉基础数据初始化，因为MySQL表里已经有数据了
+        # logger.info("初始化基础数据（使用参考项目SQL文件）...")
+        # try:
+        #     db_init_service = DatabaseInitService()
+        #     success = await db_init_service.init_database(force_reinit=False)
+        #
+        #     if success:
+        #         logger.info("基础数据初始化完成")
+        #         logger.info("权限体系数据已通过SQL文件初始化")
+        #     else:
+        #         logger.warning("基础数据初始化失败")
+        # except Exception as init_error:
+        #     logger.warning(f"基础数据初始化失败: {init_error}")
+        #     # 不阻塞应用启动，继续运行
 
         logger.info("FlowMaster 应用启动成功!")
 
@@ -228,6 +228,21 @@ async def root():
     return {"message": "Welcome to FlowMaster API"}
 
 
+# 🔥 临时添加一个测试异常的接口，用于调试异常处理
+@app.get("/test/exception", summary="测试异常处理")
+async def test_exception():
+    """测试全局异常处理器是否正常工作"""
+    raise Exception("这是一个测试异常，用于验证异常处理是否正常工作")
+
+
+# 🔥 临时添加一个测试POST接口，用于调试POST请求
+@app.post("/test/post", summary="测试POST请求")
+async def test_post(data: dict):
+    """测试POST请求是否正常工作"""
+    print(f"DEBUG: 收到POST请求: {data}")
+    return {"message": "POST请求成功", "received": data}
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
@@ -235,6 +250,6 @@ if __name__ == "__main__":
         port=app_config.app_port,
         reload=app_config.app_reload,
         log_level="info",
-        # 禁用 uvicorn 的默认日志配置，让我们的自定义配置接管
-        access_log=False,  # 禁用访问日志的默认输出
+        # 启用访问日志以便看到错误信息
+        access_log=True,
     )

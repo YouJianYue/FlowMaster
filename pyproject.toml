@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.21.0",
+    "asyncmy>=0.2.10",
     "bcrypt==3.2.0",
     "colorlog>=6.9.0",
     "cryptography>=45.0.7",

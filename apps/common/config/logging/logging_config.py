@@ -113,10 +113,10 @@ class FlowMasterLogger:
                 datefmt=self.config.date_format,
                 log_colors={
                     'DEBUG': 'cyan',
-                    'INFO': 'green',
+                    'INFO': 'blue',
                     'WARNING': 'yellow',
-                    'ERROR': 'red',
-                    'CRITICAL': 'red,bg_white',
+                    'ERROR': 'bold_red',
+                    'CRITICAL': 'bold_red,bg_white',
                 }
             )
         except ImportError:

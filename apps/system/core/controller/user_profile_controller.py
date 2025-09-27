@@ -11,18 +11,14 @@
 
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+from apps.common.dependencies import get_current_user
+from apps.common.context.user_context import UserContext
 from apps.common.models.api_response import ApiResponse, create_success_response
-from apps.common.context.user_context_holder import UserContextHolder
 from apps.system.core.service.user_service import UserService, get_user_service
 from apps.common.config.logging import get_logger
 
-# 创建路由器
 router = APIRouter(prefix="/user/profile", tags=["个人信息 API"])
-
-# HTTP Bearer 认证
-security = HTTPBearer()
 
 logger = get_logger(__name__)
 
@@ -30,7 +26,7 @@ logger = get_logger(__name__)
 @router.patch("/avatar", response_model=ApiResponse[dict], summary="修改头像")
 async def update_avatar(
     avatar_file: UploadFile = File(..., description="头像文件"),
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user_context: UserContext = Depends(get_current_user),
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
@@ -44,16 +40,11 @@ async def update_avatar(
 
     Args:
         avatar_file: 头像文件
-        credentials: 认证凭据
+        user_context: 用户上下文
 
     Returns:
         ApiResponse[dict]: 包含新头像地址的响应
     """
-    # 获取当前用户上下文
-    user_context = UserContextHolder.get_context()
-    if not user_context:
-        raise HTTPException(status_code=401, detail="用户未登录")
-
     # 验证文件
     if not avatar_file.filename:
         raise HTTPException(status_code=400, detail="头像不能为空")
@@ -76,7 +67,7 @@ async def update_avatar(
 async def update_basic_info(
     # TODO: 创建 UserBasicInfoUpdateReq 请求模型
     req: dict = Body(..., description="用户基础信息"),
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user_context: UserContext = Depends(get_current_user),
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
@@ -90,15 +81,11 @@ async def update_basic_info(
 
     Args:
         req: 用户基础信息更新请求
-        credentials: 认证凭据
+        user_context: 用户上下文
 
     Returns:
         ApiResponse[None]: 更新结果
     """
-    # 获取当前用户上下文
-    user_context = UserContextHolder.get_context()
-    if not user_context:
-        raise HTTPException(status_code=401, detail="用户未登录")
 
     try:
         # TODO: 实现基础信息更新逻辑
@@ -118,7 +105,7 @@ async def update_basic_info(
 async def update_password(
     # TODO: 创建 UserPasswordUpdateReq 请求模型
     req: dict = Body(..., description="密码修改请求"),
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user_context: UserContext = Depends(get_current_user),
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
@@ -132,15 +119,11 @@ async def update_password(
 
     Args:
         req: 密码修改请求
-        credentials: 认证凭据
+        user_context: 用户上下文
 
     Returns:
         ApiResponse[None]: 修改结果
     """
-    # 获取当前用户上下文
-    user_context = UserContextHolder.get_context()
-    if not user_context:
-        raise HTTPException(status_code=401, detail="用户未登录")
 
     try:
         # TODO: 实现密码修改逻辑
@@ -165,7 +148,7 @@ async def update_password(
 async def update_phone(
     # TODO: 创建 UserPhoneUpdateReq 请求模型
     req: dict = Body(..., description="手机号修改请求"),
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user_context: UserContext = Depends(get_current_user),
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
@@ -179,15 +162,11 @@ async def update_phone(
 
     Args:
         req: 手机号修改请求
-        credentials: 认证凭据
+        user_context: 用户上下文
 
     Returns:
         ApiResponse[None]: 修改结果
     """
-    # 获取当前用户上下文
-    user_context = UserContextHolder.get_context()
-    if not user_context:
-        raise HTTPException(status_code=401, detail="用户未登录")
 
     try:
         # TODO: 实现手机号修改逻辑，包括验证码验证
@@ -216,7 +195,7 @@ async def update_phone(
 async def update_email(
     # TODO: 创建 UserEmailUpdateReq 请求模型
     req: dict = Body(..., description="邮箱修改请求"),
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    user_context: UserContext = Depends(get_current_user),
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
@@ -230,15 +209,11 @@ async def update_email(
 
     Args:
         req: 邮箱修改请求
-        credentials: 认证凭据
+        user_context: 用户上下文
 
     Returns:
         ApiResponse[None]: 修改结果
     """
-    # 获取当前用户上下文
-    user_context = UserContextHolder.get_context()
-    if not user_context:
-        raise HTTPException(status_code=401, detail="用户未登录")
 
     try:
         # TODO: 实现邮箱修改逻辑，包括验证码验证
@@ -265,7 +240,7 @@ async def update_email(
 
 @router.get("/social", response_model=ApiResponse[List[dict]], summary="查询绑定的三方账号")
 async def list_social_bind(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    user_context: UserContext = Depends(get_current_user)
 ):
     """
     查询绑定的三方账号
@@ -276,15 +251,11 @@ async def list_social_bind(
     public List<UserSocialBindResp> listSocialBind()
 
     Args:
-        credentials: 认证凭据
+        user_context: 用户上下文
 
     Returns:
         ApiResponse[List[dict]]: 绑定的三方账号列表
     """
-    # 获取当前用户上下文
-    user_context = UserContextHolder.get_context()
-    if not user_context:
-        raise HTTPException(status_code=401, detail="用户未登录")
 
     try:
         # TODO: 实现三方账号查询逻辑
@@ -312,7 +283,7 @@ async def list_social_bind(
 async def bind_social(
     source: str,
     callback: dict = Body(..., description="OAuth回调参数"),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    user_context: UserContext = Depends(get_current_user)
 ):
     """
     绑定三方账号
@@ -326,15 +297,11 @@ async def bind_social(
     Args:
         source: 第三方平台来源
         callback: OAuth回调参数
-        credentials: 认证凭据
+        user_context: 用户上下文
 
     Returns:
         ApiResponse[None]: 绑定结果
     """
-    # 获取当前用户上下文
-    user_context = UserContextHolder.get_context()
-    if not user_context:
-        raise HTTPException(status_code=401, detail="用户未登录")
 
     try:
         # TODO: 实现三方账号绑定逻辑
@@ -357,7 +324,7 @@ async def bind_social(
 @router.delete("/social/{source}", response_model=ApiResponse[None], summary="解绑三方账号")
 async def unbind_social(
     source: str,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    user_context: UserContext = Depends(get_current_user)
 ):
     """
     解绑三方账号
@@ -370,15 +337,11 @@ async def unbind_social(
 
     Args:
         source: 第三方平台来源
-        credentials: 认证凭据
+        user_context: 用户上下文
 
     Returns:
         ApiResponse[None]: 解绑结果
     """
-    # 获取当前用户上下文
-    user_context = UserContextHolder.get_context()
-    if not user_context:
-        raise HTTPException(status_code=401, detail="用户未登录")
 
     try:
         # TODO: 实现三方账号解绑逻辑

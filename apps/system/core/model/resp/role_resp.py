@@ -208,16 +208,15 @@ class RolePermissionResp(BaseModel):
                 "type": 1,
                 "permission": "system:manage",
                 "children": [],
-                "permissions": [],
-                "isChecked": False
+                "permissions": []
             }
         }
     )
 
-    # ID
-    id: str = Field(
+    # ID - 修复：保持数字类型，与menuIds一致
+    id: int = Field(
         description="ID",
-        examples=["1"]
+        examples=[1]
     )
 
     # 标题
@@ -226,10 +225,10 @@ class RolePermissionResp(BaseModel):
         examples=["系统管理"]
     )
 
-    # 父级ID
-    parent_id: str = Field(
+    # 父级ID - 修复：保持数字类型，与menuIds一致
+    parent_id: int = Field(
         description="父级ID",
-        examples=["0"]
+        examples=[0]
     )
 
     # 类型 (1:目录 2:菜单 3:按钮)
@@ -255,13 +254,6 @@ class RolePermissionResp(BaseModel):
     permissions: List[str] = Field(
         default_factory=list,
         description="权限列表"
-    )
-
-    # 是否选中
-    is_checked: bool = Field(
-        default=False,
-        description="是否选中",
-        examples=[False]
     )
 
 

@@ -65,7 +65,8 @@ class GlobalExceptionHandler:
     @staticmethod
     async def base_exception_handler(request: Request, exc: CustomBaseException) -> JSONResponse:
         """自定义异常处理 - 对应参考项目handleBaseException"""
-        logger.error(f"[{request.method}] {request.url.path}: {exc.message}", exc_info=exc)
+        logger.error(f"[{request.method}] {request.url.path}: {type(exc).__name__}: {exc.message}", exc_info=exc)
+        print(f"ERROR: [{request.method}] {request.url.path}: {type(exc).__name__}: {exc.message}")  # 直接print确保输出
         return JSONResponse(
             status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
@@ -80,7 +81,8 @@ class GlobalExceptionHandler:
     @staticmethod
     async def business_exception_handler(request: Request, exc: BusinessException) -> JSONResponse:
         """业务异常处理 - 对应参考项目handleBusinessException"""
-        logger.error(f"[{request.method}] {request.url.path}: {exc.message}", exc_info=exc)
+        logger.error(f"[{request.method}] {request.url.path}: BusinessException: {exc.message}", exc_info=exc)
+        print(f"ERROR: [{request.method}] {request.url.path}: BusinessException: {exc.message}")  # 直接print确保输出
         return JSONResponse(
             status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
@@ -95,7 +97,8 @@ class GlobalExceptionHandler:
     @staticmethod
     async def bad_request_exception_handler(request: Request, exc: BadRequestException) -> JSONResponse:
         """错误请求异常处理 - 对应参考项目handleBadRequestException"""
-        logger.error(f"[{request.method}] {request.url.path}: {exc.message}", exc_info=exc)
+        logger.error(f"[{request.method}] {request.url.path}: BadRequestException: {exc.message}", exc_info=exc)
+        print(f"ERROR: [{request.method}] {request.url.path}: BadRequestException: {exc.message}")  # 直接print确保输出
         return JSONResponse(
             status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
@@ -169,7 +172,9 @@ class GlobalExceptionHandler:
     @staticmethod
     async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """通用异常处理"""
-        logger.error(f"[{request.method}] {request.url.path}: Unexpected error", exc_info=exc)
+        # 使用critical级别确保一定会输出
+        logger.critical(f"[{request.method}] {request.url.path}: Unexpected error - {type(exc).__name__}: {str(exc)}", exc_info=exc)
+        print(f"ERROR: [{request.method}] {request.url.path}: {type(exc).__name__}: {str(exc)}")  # 直接print确保输出
         return JSONResponse(
             status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={

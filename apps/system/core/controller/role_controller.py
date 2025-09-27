@@ -17,7 +17,7 @@ from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.common.models.page_resp import PageResp
 from apps.common.enums.data_scope_enum import DataScopeEnum
 from apps.system.core.service.role_service import get_role_service
-from apps.system.core.service.menu_service import get_menu_service
+from apps.system.core.service.menu_service import get_menu_service, MenuService
 from apps.system.core.service.user_role_service import get_user_role_service
 from apps.system.core.model.resp.role_resp import RoleResp, RoleDetailResp, RolePermissionResp, RoleUserResp
 from apps.system.core.model.req.role_req import RoleReq
@@ -308,7 +308,9 @@ async def get_role_dict(
 
 @router.get("/permission/tree", response_model=ApiResponse[List[RolePermissionResp]], summary="查询角色权限树列表")
 @require_permission("system:role:updatePermission")
-async def list_permission_tree():
+async def list_permission_tree(
+    menu_service: MenuService = Depends(get_menu_service)
+):
     """
     查询角色权限树列表
 
@@ -322,31 +324,31 @@ async def list_permission_tree():
     # List<Tree<Long>> treeList = menuService.tree(null, null, false);
     # return BeanUtil.copyToList(treeList, RolePermissionResp.class);
 
-    # 暂时使用菜单服务的现有方法，避免调用不存在的 tree 方法
-    try:
-        # 尝试调用菜单服务的权限树方法
-        tree_list = await role_controller.menu_service.get_permission_tree()
-    except AttributeError:
-        # 如果方法不存在，返回空列表
-        tree_list = []
-
-    # 转换为 RolePermissionResp 格式
-    def convert_to_permission_resp(nodes):
+    # 获取权限树数据
+    tree_list = await menu_service.get_permission_tree()
+    
+    # 使用 Pydantic 模型转换
+    def convert_to_permission_resp(nodes: List[Dict[str, Any]]) -> List[RolePermissionResp]:
+        """递归转换权限树节点为 RolePermissionResp 模型"""
         result = []
         for node in nodes:
+            # 递归处理子节点
+            children = convert_to_permission_resp(node.get("children", [])) if node.get("children") else []
+            
+            # 创建 RolePermissionResp 实例
             permission_node = RolePermissionResp(
                 id=str(node.get("id", "")),
                 title=node.get("title", ""),
                 parent_id=str(node.get("parentId", "0")),
                 type=node.get("type", 1),
                 permission=node.get("permission", ""),
-                children=convert_to_permission_resp(node.get("children", [])) if node.get("children") else [],
-                permissions=[],
-                is_checked=False
+                children=children,
+                permissions=[]  # 权限列表，用于按钮权限勾选
             )
             result.append(permission_node)
         return result
 
+    # 转换数据格式
     formatted_tree = convert_to_permission_resp(tree_list)
     return create_success_response(data=formatted_tree)
 

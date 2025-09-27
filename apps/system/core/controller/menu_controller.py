@@ -5,14 +5,15 @@
 """
 
 from typing import List, Dict, Any
-from fastapi import APIRouter, HTTPException, Body, Path
+from fastapi import APIRouter, HTTPException, Body, Path, Depends
 from sqlalchemy import select
 from apps.common.models.api_response import ApiResponse, create_success_response
-from apps.system.core.service.impl.menu_service_impl import menu_service
+from apps.system.core.service.menu_service import MenuService, get_menu_service
 from apps.system.core.model.req.menu_req import MenuReq
 from apps.system.core.model.resp.menu_resp import MenuResp
 from apps.common.models.req.common_status_update_req import CommonStatusUpdateReq
-from apps.common.context.user_context_holder import UserContextHolder
+from apps.common.dependencies import get_current_user
+from apps.common.context.user_context import UserContext
 from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.model.entity.menu_entity import MenuEntity
 from apps.common.config.logging.logging_config import get_logger
@@ -22,10 +23,12 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/system/menu", tags=["菜单管理"])
 
 
-@router.get("/tree", 
-            summary="获取菜单树", 
+@router.get("/tree",
+            summary="获取菜单树",
             description="获取完整的菜单树结构，用于菜单管理页面")
-async def get_menu_tree() -> ApiResponse[List[Dict[str, Any]]]:
+async def get_menu_tree(
+    menu_service: MenuService = Depends(get_menu_service)
+) -> ApiResponse[List[Dict[str, Any]]]:
     """
     获取菜单树
     
@@ -40,16 +43,19 @@ async def get_menu_tree() -> ApiResponse[List[Dict[str, Any]]]:
         frontend_tree = menu_service.convert_to_frontend_format(menu_tree)
 
         return create_success_response(data=frontend_tree)
-        
+
     except Exception as e:
         logger.error(f"获取菜单树失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取菜单树失败: {str(e)}")
 
 
-@router.get("/user/tree", 
-            summary="获取用户菜单树", 
+@router.get("/user/tree",
+            summary="获取用户菜单树",
             description="获取当前用户有权限的菜单树")
-async def get_user_menu_tree() -> ApiResponse[List[Dict[str, Any]]]:
+async def get_user_menu_tree(
+    user_context: UserContext = Depends(get_current_user),
+    menu_service: MenuService = Depends(get_menu_service)
+) -> ApiResponse[List[Dict[str, Any]]]:
     """
     获取用户菜单树（根据权限过滤）
     
@@ -57,28 +63,26 @@ async def get_user_menu_tree() -> ApiResponse[List[Dict[str, Any]]]:
         ApiResponse[List[Dict[str, Any]]]: 用户权限菜单树
     """
     try:
-        # 获取当前用户ID
-        user_id = UserContextHolder.get_user_id()
-        if not user_id:
-            raise HTTPException(status_code=401, detail="用户未登录")
-        
         # 获取用户菜单树
-        menu_tree = await menu_service.get_user_menu_tree(user_id)
-        
+        menu_tree = await menu_service.get_user_menu_tree(user_context.id)
+
         # 转换为前端格式
         frontend_tree = menu_service.convert_to_frontend_format(menu_tree)
-        
+
         return create_success_response(data=frontend_tree)
-        
+
     except Exception as e:
         logger.error(f"获取用户菜单树失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取用户菜单树失败: {str(e)}")
 
 
-@router.get("/route/tree", 
-            summary="获取路由树", 
+@router.get("/route/tree",
+            summary="获取路由树",
             description="获取前端路由配置需要的菜单树（仅目录和菜单类型）")
-async def get_route_tree() -> ApiResponse[List[Dict[str, Any]]]:
+async def get_route_tree(
+    user_context: UserContext = Depends(get_current_user),
+    menu_service: MenuService = Depends(get_menu_service)
+) -> ApiResponse[List[Dict[str, Any]]]:
     """
     获取路由树（用于前端路由配置）
     仅包含目录(1)和菜单(2)类型，排除按钮(3)类型
@@ -87,26 +91,21 @@ async def get_route_tree() -> ApiResponse[List[Dict[str, Any]]]:
         ApiResponse[List[Dict[str, Any]]]: 路由树数据
     """
     try:
-        # 获取当前用户ID
-        user_id = UserContextHolder.get_user_id()
-        if not user_id:
-            user_id = 1  # 默认使用管理员用户
-        
         # 获取用户路由树
-        route_tree = await menu_service.get_user_menu_tree(user_id)
-        
+        route_tree = await menu_service.get_user_menu_tree(user_context.id)
+
         # 转换为前端格式
         frontend_tree = menu_service.convert_to_frontend_format(route_tree)
-        
+
         return create_success_response(data=frontend_tree)
-        
+
     except Exception as e:
         logger.error(f"获取路由树失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取路由树失败: {str(e)}")
 
 
-@router.get("/{menu_id}", 
-            summary="获取菜单详情", 
+@router.get("/{menu_id}",
+            summary="获取菜单详情",
             description="根据菜单ID获取菜单详情")
 async def get_menu_detail(menu_id: int) -> ApiResponse[Dict[str, Any]]:
     """
@@ -124,10 +123,10 @@ async def get_menu_detail(menu_id: int) -> ApiResponse[Dict[str, Any]]:
                 select(MenuEntity).where(MenuEntity.id == menu_id)
             )
             menu = result.scalar_one_or_none()
-            
+
             if not menu:
                 raise HTTPException(status_code=404, detail=f"菜单不存在: {menu_id}")
-            
+
             # 转换为字典格式
             menu_dict = {
                 "id": menu.id,
@@ -147,11 +146,11 @@ async def get_menu_detail(menu_id: int) -> ApiResponse[Dict[str, Any]]:
                 "status": menu.status,  # 保持整数类型
                 "create_user": menu.create_user,
                 "create_time": menu.create_time.strftime("%Y-%m-%d %H:%M:%S") if menu.create_time else None,  # 简单时间格式
-                "update_time": menu.update_time.strftime("%Y-%m-%d %H:%M:%S") if menu.update_time else None   # 简单时间格式
+                "update_time": menu.update_time.strftime("%Y-%m-%d %H:%M:%S") if menu.update_time else None  # 简单时间格式
             }
-            
+
             return create_success_response(data=menu_dict)
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -160,7 +159,10 @@ async def get_menu_detail(menu_id: int) -> ApiResponse[Dict[str, Any]]:
 
 
 @router.post("", response_model=ApiResponse[MenuResp], summary="创建菜单")
-async def create_menu(menu_req: MenuReq) -> ApiResponse[MenuResp]:
+async def create_menu(
+    menu_req: MenuReq,
+    menu_service: MenuService = Depends(get_menu_service)
+) -> ApiResponse[MenuResp]:
     """
     创建菜单（一比一复刻参考项目）
 
@@ -169,6 +171,8 @@ async def create_menu(menu_req: MenuReq) -> ApiResponse[MenuResp]:
 
     Returns:
         ApiResponse[MenuResp]: 创建的菜单数据
+        :param menu_req:
+        :param menu_service:
     """
     try:
         # 调用服务层创建菜单
@@ -182,8 +186,9 @@ async def create_menu(menu_req: MenuReq) -> ApiResponse[MenuResp]:
 
 @router.put("/{menu_id}", response_model=ApiResponse[MenuResp], summary="更新菜单")
 async def update_menu(
-    menu_id: int = Path(..., description="菜单ID", example=1010),
-    menu_req: MenuReq = ...
+        menu_id: int = Path(..., description="菜单ID", example=1010),
+        menu_req: MenuReq = ...,
+        menu_service: MenuService = Depends(get_menu_service)
 ) -> ApiResponse[MenuResp]:
     """
     更新菜单（一比一复刻参考项目）
@@ -194,6 +199,9 @@ async def update_menu(
 
     Returns:
         ApiResponse[MenuResp]: 更新的菜单数据
+        :param menu_id:
+        :param menu_req:
+        :param menu_service:
     """
     try:
         # 调用服务层更新菜单
@@ -207,8 +215,9 @@ async def update_menu(
 
 @router.put("/{menu_id}/status", response_model=ApiResponse[bool], summary="修改菜单状态")
 async def update_menu_status(
-    menu_id: int = Path(..., description="菜单ID", example=1010),
-    status_req: CommonStatusUpdateReq = ...
+        menu_id: int = Path(..., description="菜单ID", example=1010),
+        status_req: CommonStatusUpdateReq = ...,
+        menu_service: MenuService = Depends(get_menu_service)
 ) -> ApiResponse[bool]:
     """
     修改菜单状态（启用/禁用）
@@ -219,6 +228,9 @@ async def update_menu_status(
 
     Returns:
         ApiResponse[bool]: 更新结果
+        :param status_req:
+        :param menu_id:
+        :param menu_service:
     """
     try:
         # 调用服务层更新状态
@@ -232,7 +244,10 @@ async def update_menu_status(
 
 
 @router.delete("", response_model=ApiResponse[bool], summary="批量删除菜单")
-async def batch_delete_menu(ids: List[int] = Body(..., description="菜单ID列表")) -> ApiResponse[bool]:
+async def batch_delete_menu(
+    ids: List[int] = Body(..., description="菜单ID列表"),
+    menu_service: MenuService = Depends(get_menu_service)
+) -> ApiResponse[bool]:
     """
     批量删除菜单（一比一复刻参考项目）
 
@@ -241,6 +256,8 @@ async def batch_delete_menu(ids: List[int] = Body(..., description="菜单ID列�
 
     Returns:
         ApiResponse[bool]: 删除结果
+        :param ids:
+        :param menu_service:
     """
     try:
         # 调用服务层批量删除
@@ -253,7 +270,9 @@ async def batch_delete_menu(ids: List[int] = Body(..., description="菜单ID列�
 
 
 @router.get("/dict/tree", response_model=ApiResponse[List[Dict[str, Any]]], summary="获取菜单字典树")
-async def get_menu_dict_tree() -> ApiResponse[List[Dict[str, Any]]]:
+async def get_menu_dict_tree(
+    menu_service: MenuService = Depends(get_menu_service)
+) -> ApiResponse[List[Dict[str, Any]]]:
     """
     获取菜单字典树（用于下拉选择）
 
@@ -271,7 +290,9 @@ async def get_menu_dict_tree() -> ApiResponse[List[Dict[str, Any]]]:
 
 
 @router.delete("/cache", response_model=ApiResponse[bool], summary="清除缓存")
-async def clear_cache() -> ApiResponse[bool]:
+async def clear_cache(
+    menu_service: MenuService = Depends(get_menu_service)
+) -> ApiResponse[bool]:
     """
     清除缓存（一比一复刻参考项目）
 

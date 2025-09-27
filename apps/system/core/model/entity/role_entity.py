@@ -41,10 +41,10 @@ class RoleEntity(BaseEntity):
     
     # 是否为系统内置数据
     is_system: bool = Column(Boolean, nullable=False, default=False, comment="是否为系统内置数据")
-    
+
     # 菜单选择是否父子节点关联
     menu_check_strictly: bool = Column(Boolean, nullable=False, default=True, comment="菜单选择是否父子节点关联")
-    
+
     # 部门选择是否父子节点关联
     dept_check_strictly: bool = Column(Boolean, nullable=False, default=True, comment="部门选择是否父子节点关联")
 

@@ -6,8 +6,11 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Union
 
+from apps.system.core.model.entity.user_entity import UserEntity
 from apps.system.core.model.resp.user_resp import UserResp
 from apps.system.core.model.resp.user_detail_resp import UserDetailResp
+from apps.system.core.model.req.user_req import UserUpdateReq
+from apps.system.core.model.req.user_role_update_req import UserRoleUpdateReq
 from apps.common.models.page_resp import PageResp
 
 
@@ -54,7 +57,7 @@ class UserService(ABC):
         pass
 
     @abstractmethod
-    async def get(self, user_id: Union[int, str]) -> Optional['UserEntity']:
+    async def get(self, user_id: Union[int, str]) -> UserEntity:
         """
         根据用户ID获取用户实体
 
@@ -62,12 +65,15 @@ class UserService(ABC):
             user_id: 用户ID
 
         Returns:
-            Optional[UserEntity]: 用户实体，不存在则返回None
+            UserEntity: 用户实体
+
+        Raises:
+            BusinessException: 当用户不存在时抛出异常
         """
         pass
 
     @abstractmethod
-    async def update_user(self, user_id: Union[int, str], update_req: 'UserUpdateReq') -> None:
+    async def update_user(self, user_id: Union[int, str], update_req: UserUpdateReq) -> None:
         """
         更新用户信息
 
@@ -78,7 +84,7 @@ class UserService(ABC):
         pass
 
     @abstractmethod
-    async def update_role(self, update_req: 'UserRoleUpdateReq', user_id: Union[int, str]) -> None:
+    async def update_role(self, update_req: UserRoleUpdateReq, user_id: Union[int, str]) -> None:
         """
         分配用户角色
 

@@ -167,25 +167,6 @@ class UserServiceImpl(UserService):
             self.logger.error(f"获取用户详情失败: {e}")
             raise
 
-    async def get(self, user_id: Union[int, str]) -> Optional['UserEntity']:
-        """
-        根据用户ID获取用户实体
-
-        Args:
-            user_id: 用户ID
-
-        Returns:
-            Optional[UserEntity]: 用户实体，不存在则返回None
-        """
-        try:
-            async with DatabaseSession.get_session_context() as session:
-                from apps.system.core.model.entity.user_entity import UserEntity
-                user = await session.get(UserEntity, int(user_id))
-                return user
-        except Exception as e:
-            self.logger.error(f"根据ID获取用户失败: {e}")
-            return None
-
     async def update_user(self, user_id: Union[int, str], update_req: UserUpdateReq):
         """
         更新用户信息 - 基于参考项目的update逻辑
@@ -358,7 +339,7 @@ class UserServiceImpl(UserService):
             self.logger.error(f"更新用户上下文失败: {e}")
             # 不抛出异常，避免影响主业务流程
 
-    async def get(self, user_id: Union[int, str]) -> Optional[UserEntity]:
+    async def get(self, user_id: Union[int, str]) -> UserEntity:
         """
         根据ID获取用户实体
 
@@ -366,7 +347,10 @@ class UserServiceImpl(UserService):
             user_id: 用户ID
 
         Returns:
-            Optional[UserEntity]: 用户实体
+            UserEntity: 用户实体
+
+        Raises:
+            BusinessException: 当用户不存在时抛出异常
         """
         try:
             async with DatabaseSession.get_session_context() as session:
@@ -374,10 +358,16 @@ class UserServiceImpl(UserService):
                 stmt = select(UserEntity).where(UserEntity.id == int(user_id))
                 result = await session.execute(stmt)
                 user = result.scalar_one_or_none()
+
+                if not user:
+                    raise BusinessException(f"用户不存在: {user_id}")
+
                 return user
+        except BusinessException:
+            raise
         except Exception as e:
             self.logger.error(f"获取用户信息失败: {e}")
-            return None
+            raise BusinessException(f"获取用户信息失败: {str(e)}")
 
     async def _get_dept_and_children_ids(self, session, dept_id: int) -> List[int]:
         """

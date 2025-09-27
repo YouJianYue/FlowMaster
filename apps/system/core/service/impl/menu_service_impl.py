@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 from sqlalchemy import select, delete, func
 from apps.common.config.database.database_session import DatabaseSession
+from apps.system.core.service.menu_service import MenuService
 from apps.system.core.model.entity.menu_entity import MenuEntity
 from apps.system.core.model.req.menu_req import MenuReq
 from apps.system.core.model.resp.menu_resp import MenuResp
@@ -16,7 +17,7 @@ from apps.common.config.logging.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-class MenuServiceImpl:
+class MenuServiceImpl(MenuService):
     """菜单服务实现（数据库驱动）"""
 
     async def get_menu_tree(self, only_enabled: bool = True) -> List[Dict[str, Any]]:
@@ -39,6 +40,8 @@ class MenuServiceImpl:
             # 执行查询
             result = await session.execute(query)
             menus = result.scalars().all()
+
+            print(f"MenuServiceImpl: 查询到菜单数量: {len(menus)}")  # 调试信息
 
             # 转换为字典格式
             menu_list = []
@@ -82,12 +85,16 @@ class MenuServiceImpl:
         Returns:
             List[Dict[str, Any]]: 用户权限菜单树
         """
-        # 目前假设所有用户都能看到所有启用菜单（级联禁用逻辑）
-        # 父菜单禁用时，子菜单自动不可见
-        menu_tree = await self.get_menu_tree(only_enabled=True)
+        # 获取用户有权限的菜单列表
+        user_menus = await self.list_by_user_id(user_id)
+        
+        # 将菜单列表构建为树结构
+        menu_tree = self._build_tree(user_menus)
 
         # 过滤掉隐藏菜单和按钮类型菜单（路由只需要目录和菜单）
-        return self._filter_for_routes(menu_tree)
+        filtered_tree = self._filter_for_routes(menu_tree)
+
+        return filtered_tree
 
     def _build_tree(
         self, menu_list: List[Dict[str, Any]], parent_id: int = 0
@@ -200,7 +207,7 @@ class MenuServiceImpl:
 
         return result
 
-    async def create_menu(self, menu_req: MenuReq) -> MenuResp:
+    async def create_menu(self, menu_req: 'MenuReq') -> 'MenuResp':
         """
         创建菜单（一比一复刻参考项目）
 
@@ -243,7 +250,7 @@ class MenuServiceImpl:
             # 转换为响应模型
             return self._entity_to_resp(menu_entity)
 
-    async def update_menu(self, menu_id: int, menu_req: MenuReq) -> MenuResp:
+    async def update_menu(self, menu_id: int, menu_req: 'MenuReq') -> 'MenuResp':
         """
         更新菜单（一比一复刻参考项目）
 
@@ -358,7 +365,7 @@ class MenuServiceImpl:
         # 目前暂时跳过，因为还没有Redis缓存
         pass
 
-    def _entity_to_resp(self, entity: MenuEntity) -> MenuResp:
+    def _entity_to_resp(self, entity: MenuEntity) -> 'MenuResp':
         """
         将菜单实体转换为响应模型
 
@@ -368,6 +375,7 @@ class MenuServiceImpl:
         Returns:
             MenuResp: 菜单响应模型
         """
+        from apps.system.core.model.resp.menu_resp import MenuResp
         return MenuResp(
             id=entity.id,
             title=entity.title,
@@ -416,6 +424,348 @@ class MenuServiceImpl:
                 }
                 result.append(dict_item)
         return result
+
+    # 需要实现接口中的其他抽象方法
+    async def list_all_menus(self) -> List[Dict[str, Any]]:
+        """
+        获取所有菜单数据
+
+        Returns:
+            List[Dict[str, Any]]: 菜单列表
+        """
+        async with DatabaseSession.get_session_context() as session:
+            stmt = select(MenuEntity).order_by(MenuEntity.sort, MenuEntity.id)
+            result = await session.execute(stmt)
+            menu_entities = result.scalars().all()
+
+            menu_list = []
+            for menu in menu_entities:
+                menu_dict = {
+                    "id": menu.id,
+                    "title": menu.title,
+                    "parent_id": menu.parent_id,
+                    "type": menu.type,
+                    "path": menu.path,
+                    "name": menu.name,
+                    "component": menu.component,
+                    "redirect": menu.redirect,
+                    "icon": menu.icon,
+                    "is_external": menu.is_external,
+                    "is_cache": menu.is_cache,
+                    "is_hidden": menu.is_hidden,
+                    "permission": menu.permission,
+                    "sort": menu.sort,
+                    "status": menu.status,
+                    "create_user": menu.create_user
+                }
+                menu_list.append(menu_dict)
+
+            return menu_list
+
+    async def list_permission_by_user_id(self, user_id: int) -> set[str]:
+        """
+        根据用户ID查询权限码集合
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            Set[str]: 权限码集合
+        """
+        async with DatabaseSession.get_session_context() as session:
+            # 临时实现：假设用户ID=1是超级管理员，拥有所有权限
+            if user_id == 1:
+                # 超级管理员拥有所有权限
+                stmt = select(MenuEntity.permission).where(
+                    MenuEntity.permission.is_not(None),
+                    MenuEntity.status == 1
+                )
+                result = await session.execute(stmt)
+                permissions = {row[0] for row in result.fetchall() if row[0]}
+                return permissions
+
+            # 其他用户返回基础权限
+            return {"system:user:list", "system:role:list", "system:menu:list"}
+
+    async def list_by_user_id(self, user_id: int) -> List[Dict[str, Any]]:
+        """
+        根据用户ID查询菜单列表
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            List[Dict[str, Any]]: 用户有权限的菜单列表
+        """
+        async with DatabaseSession.get_session_context() as session:
+            from apps.system.core.model.entity.user_role_entity import UserRoleEntity
+            from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
+            
+            # 查询用户的所有角色ID
+            user_roles_stmt = select(UserRoleEntity.role_id).where(UserRoleEntity.user_id == user_id)
+            user_roles_result = await session.execute(user_roles_stmt)
+            role_ids = [row[0] for row in user_roles_result.fetchall()]
+            
+            if not role_ids:
+                # 用户没有分配任何角色，返回空列表
+                return []
+            
+            # 查询这些角色关联的所有菜单ID
+            role_menus_stmt = select(RoleMenuEntity.menu_id).where(RoleMenuEntity.role_id.in_(role_ids))
+            role_menus_result = await session.execute(role_menus_stmt)
+            menu_ids = [row[0] for row in role_menus_result.fetchall()]
+            
+            if not menu_ids:
+                # 角色没有分配任何菜单，返回空列表
+                return []
+            
+            # 查询这些菜单的详细信息（只查询启用的菜单）
+            stmt = select(MenuEntity).where(
+                MenuEntity.id.in_(menu_ids),
+                MenuEntity.status == 1  # 只查询启用的菜单
+            ).order_by(MenuEntity.sort)
+            
+            result = await session.execute(stmt)
+            menu_entities = result.scalars().all()
+
+            menu_list = []
+            for menu in menu_entities:
+                menu_dict = {
+                    "id": menu.id,
+                    "title": menu.title,
+                    "parent_id": menu.parent_id,
+                    "type": menu.type,
+                    "path": menu.path,
+                    "name": menu.name,
+                    "component": menu.component,
+                    "redirect": menu.redirect,
+                    "icon": menu.icon,
+                    "is_external": menu.is_external,
+                    "is_cache": menu.is_cache,
+                    "is_hidden": menu.is_hidden,
+                    "permission": menu.permission,
+                    "sort": menu.sort,
+                    "status": menu.status,
+                    "create_user": menu.create_user
+                }
+                menu_list.append(menu_dict)
+            return menu_list
+
+    async def get_user_route_tree(self, user_id: int) -> List[Dict[str, Any]]:
+        """
+        获取用户路由树（用于前端路由配置）
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            List[Dict[str, Any]]: 用户路由树
+        """
+        print(f"🔍 MenuService: 开始获取用户 {user_id} 的路由树")
+        
+        # 获取用户菜单
+        user_menus = await self.list_by_user_id(user_id)
+        print(f"📋 用户 {user_id} 共有 {len(user_menus)} 个菜单权限")
+
+        # 调试：查看前几个菜单的详细信息
+        if user_menus:
+            print("🔍 前5个菜单的详细信息:")
+            for i, menu in enumerate(user_menus[:5]):
+                print(f"  菜单{i+1}: ID={menu.get('id')}, 标题={menu.get('title')}, "
+                      f"状态={menu.get('status')}, 类型={menu.get('type')}, "
+                      f"隐藏={menu.get('is_hidden')}")
+
+        # 过滤可见菜单（排除按钮类型，只保留目录和菜单）
+        visible_menus = []
+        filtered_out_count = {"status": 0, "hidden": 0, "type": 0}
+        
+        for menu in user_menus:
+            # 详细检查每个过滤条件
+            status_ok = menu.get("status") == 1
+            not_hidden = not menu.get("is_hidden", False)
+            type_ok = menu.get("type") in [1, 2]
+            
+            if not status_ok:
+                filtered_out_count["status"] += 1
+            if not not_hidden:
+                filtered_out_count["hidden"] += 1
+            if not type_ok:
+                filtered_out_count["type"] += 1
+            
+            if status_ok and not_hidden and type_ok:
+                visible_menus.append(menu)
+        
+        print(f"🔍 过滤统计: 状态不符={filtered_out_count['status']}, "
+              f"隐藏菜单={filtered_out_count['hidden']}, 类型不符={filtered_out_count['type']}")
+        print(f"🔍 过滤后可见菜单: {len(visible_menus)} 个")
+        
+        if visible_menus:
+            print("🔍 可见菜单示例:")
+            for menu in visible_menus[:3]:
+                print(f"  - ID: {menu.get('id')}, 标题: {menu.get('title')}, 类型: {menu.get('type')}")
+
+        # 构建树结构
+        tree_result = self._build_menu_tree(visible_menus)
+        print(f"🌳 构建树结构后: {len(tree_result)} 个根节点")
+        
+        return tree_result
+
+    async def build_menu_tree_with_permissions(self, user_id: int) -> List[Dict[str, Any]]:
+        """
+        构建包含权限信息的菜单树
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            List[Dict[str, Any]]: 菜单树（包含权限信息）
+        """
+        # 获取用户所有菜单
+        user_menus = await self.list_by_user_id(user_id)
+
+        # 构建完整树结构（包含按钮权限）
+        return self._build_menu_tree(user_menus)
+
+    def convert_to_route_format(self, menu_tree: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        将菜单树转换为前端路由格式
+
+        Args:
+            menu_tree: 菜单树数据
+
+        Returns:
+            List[Dict[str, Any]]: 前端路由格式的菜单树
+        """
+        routes = []
+
+        for menu in menu_tree:
+            # 跳过按钮类型
+            if menu.get("type") == 3:
+                continue
+
+            # 使用参考项目的完全一致的字段格式
+            route = {
+                "id": menu.get("id"),
+                "parentId": menu.get("parent_id"),
+                "title": menu.get("title"),
+                "type": menu.get("type"),
+                "path": menu.get("path"),
+                "name": menu.get("name"),
+                "component": menu.get("component"),
+                "icon": menu.get("icon"),
+                "isExternal": menu.get("is_external", False),
+                "isCache": menu.get("is_cache", False),
+                "isHidden": menu.get("is_hidden", False),
+                "sort": menu.get("sort", 999),
+            }
+
+            # 处理重定向
+            if menu.get("redirect"):
+                route["redirect"] = menu["redirect"]
+
+            # 处理权限标识
+            if menu.get("permission"):
+                route["permission"] = menu["permission"]
+
+            # 递归处理子菜单
+            if menu.get("children"):
+                route["children"] = self.convert_to_route_format(menu["children"])
+
+            # 清理空值
+            route = {k: v for k, v in route.items() if v is not None}
+
+            routes.append(route)
+
+        return routes
+
+    def _build_menu_tree(self, menus: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        构建菜单树结构
+
+        Args:
+            menus: 菜单列表
+
+        Returns:
+            List[Dict[str, Any]]: 菜单树
+        """
+        if not menus:
+            return []
+
+        # 创建节点映射
+        node_map = {}
+        root_nodes = []
+
+        # 首先创建所有节点
+        for menu in menus:
+            node = menu.copy()
+            node["children"] = []
+            node_map[menu["id"]] = node
+
+            if menu.get("parent_id", 0) == 0:
+                root_nodes.append(node)
+
+        # 然后建立父子关系
+        for menu in menus:
+            parent_id = menu.get("parent_id", 0)
+            if parent_id != 0 and parent_id in node_map:
+                node_map[parent_id]["children"].append(node_map[menu["id"]])
+
+        # 按排序号排序
+        def sort_tree(nodes):
+            nodes.sort(key=lambda x: x.get("sort", 999))
+            for node in nodes:
+                if node["children"]:
+                    sort_tree(node["children"])
+
+        sort_tree(root_nodes)
+        return root_nodes
+
+    async def get_permission_tree(self) -> List[Dict[str, Any]]:
+        """
+        获取权限树 - 用于角色权限分配
+        一比一复刻参考项目: menuService.tree(null, null, false)
+
+        Returns:
+            List[Dict[str, Any]]: 权限树列表
+        """
+        # 获取所有菜单数据
+        all_menus = await self.list_all_menus()
+
+        # 创建id到menu的映射，方便排序时查找
+        menu_map = {menu.get("id"): menu for menu in all_menus}
+
+        # 一比一复刻参考项目的tree方法逻辑
+        def build_tree(menus, parent_id=0):
+            result = []
+
+            for menu in menus:
+                if menu.get("parent_id", 0) != parent_id:
+                    continue
+
+                # 转换为符合RolePermissionResp格式的节点
+                # 关键修复：保持ID为数字类型，与menuIds保持一致
+                node = {
+                    "id": menu.get("id"),  # 保持数字类型，与menuIds一致
+                    "title": menu.get("title"),
+                    "parentId": menu.get("parent_id", 0),  # 保持数字类型
+                    "type": menu.get("type"),
+                    "permission": menu.get("permission") or None,  # 空字符串转为None
+                }
+
+                # 递归获取子菜单（包含所有类型：目录、菜单、按钮）
+                child_nodes = build_tree(menus, menu.get("id"))
+                if child_nodes:
+                    node["children"] = child_nodes
+                else:
+                    node["children"] = None  # 显式设置为None，符合参考项目格式
+
+                result.append(node)
+
+            # 按排序号排序（使用sort字段）
+            result.sort(key=lambda x: menu_map.get(x.get("id"), {}).get("sort", 999))
+            return result
+
+        return build_tree(all_menus)
 
 
 # 全局服务实例

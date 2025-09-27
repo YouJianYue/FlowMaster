@@ -4,10 +4,11 @@
 
 """
 
-from fastapi import APIRouter, Query, Path, HTTPException
+from fastapi import APIRouter, Query, Path, HTTPException, Depends
 from typing import Optional, List
 
-from apps.common.context.user_context_holder import UserContextHolder
+from apps.common.dependencies import get_current_user
+from apps.common.context.user_context import UserContext
 from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.system.core.service.impl.message_service_impl import MessageServiceImpl
 from apps.system.core.service.impl.notice_service_impl import NoticeServiceImpl
@@ -32,9 +33,10 @@ notice_service = NoticeServiceImpl()
 )
 async def count_unread_message(
     detail: Optional[bool] = Query(None, description="是否查询详情", example=True),
+    user_context: UserContext = Depends(get_current_user),
 ):
     """查询未读消息数量"""
-    user_id = UserContextHolder.get_user_id() or 1  # 临时使用默认用户ID
+    user_id = user_context.id
     result = await message_service.count_unread_by_user_id(user_id, detail)
     return create_success_response(data=result)
 
@@ -45,9 +47,11 @@ async def count_unread_message(
     summary="查询未读公告数量",
     description="查询当前用户的未读公告数量",
 )
-async def count_unread_notice():
+async def count_unread_notice(
+    user_context: UserContext = Depends(get_current_user),
+):
     """查询未读公告数量"""
-    user_id = UserContextHolder.get_user_id() or 1  # 临时使用默认用户ID
+    user_id = user_context.id
     unread_list = await notice_service.list_unread_ids_by_user_id(None, user_id)
     result = NoticeUnreadCountResp(total=len(unread_list))
     return create_success_response(data=result)
@@ -59,9 +63,12 @@ async def count_unread_notice():
     summary="查询未读公告",
     description="查询当前用户的未读公告",
 )
-async def list_unread_notice(method: str):
+async def list_unread_notice(
+    method: str,
+    user_context: UserContext = Depends(get_current_user),
+):
     """查询未读公告"""
-    user_id = UserContextHolder.get_user_id() or 1  # 临时使用默认用户ID
+    user_id = user_context.id
     method_enum = NoticeMethodEnum[method]
     result = await notice_service.list_unread_ids_by_user_id(method_enum, user_id)
     return create_success_response(data=result)

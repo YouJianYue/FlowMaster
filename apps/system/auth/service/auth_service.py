@@ -44,31 +44,57 @@ class AuthService:
         Returns:
             LoginResp: 登录响应
         """
-        # 一比一复刻参考项目AuthServiceImpl.login()实现
-        auth_type = request.auth_type
+        # 🔥 添加调试日志
+        print(f"DEBUG: AuthService.login 开始 - auth_type: {request.auth_type}")
+        
+        try:
+            # 一比一复刻参考项目AuthServiceImpl.login()实现
+            auth_type = request.auth_type
+            print(f"DEBUG: 获取到 auth_type: {auth_type}")
 
-        # 1. 校验客户端（对应参考项目的clientService.getByClientId()逻辑）
-        client = await self.client_service.get_by_client_id(request.client_id)
-        if not client:
-            raise BusinessException("客户端不存在")
-        if client.status == "DISABLE":  # 对应DisEnableStatusEnum.DISABLE
-            raise BusinessException("客户端已禁用")
-        if auth_type.value not in client.auth_type:
-            raise BusinessException(f"该客户端暂未授权 [{auth_type.value}] 认证")
+            # 1. 校验客户端（对应参考项目的clientService.getByClientId()逻辑）
+            print(f"DEBUG: 准备校验客户端 - client_id: {request.client_id}")
+            client = await self.client_service.get_by_client_id(request.client_id)
+            if not client:
+                print(f"DEBUG: 客户端不存在 - client_id: {request.client_id}")
+                raise BusinessException("客户端不存在")
+            print(f"DEBUG: 客户端校验通过 - status: {client.status}")
+            
+            if client.status == "DISABLE":  # 对应DisEnableStatusEnum.DISABLE
+                print(f"DEBUG: 客户端已禁用")
+                raise BusinessException("客户端已禁用")
+            if auth_type.value not in client.auth_type:
+                print(f"DEBUG: 客户端未授权此认证类型 - auth_type: {auth_type.value}, client_auth_types: {client.auth_type}")
+                raise BusinessException(f"该客户端暂未授权 [{auth_type.value}] 认证")
 
-        # 2. 获取登录处理器（对应参考项目的loginHandlerFactory.getHandler()）
-        handler = LoginHandlerFactory.get_handler(auth_type)
+            # 2. 获取登录处理器（对应参考项目的loginHandlerFactory.getHandler()）
+            print(f"DEBUG: 准备获取登录处理器")
+            handler = LoginHandlerFactory.get_handler(auth_type)
+            print(f"DEBUG: 获取到登录处理器: {type(handler).__name__}")
 
-        # 3. 登录前置处理
-        await handler.pre_login(request, client, http_request)
+            # 3. 登录前置处理
+            print(f"DEBUG: 执行登录前置处理")
+            await handler.pre_login(request, client, http_request)
+            print(f"DEBUG: 登录前置处理完成")
 
-        # 4. 执行登录
-        login_resp = await handler.login(request, client, http_request)
+            # 4. 执行登录
+            print(f"DEBUG: 执行登录处理")
+            login_resp = await handler.login(request, client, http_request)
+            print(f"DEBUG: 登录处理完成")
 
-        # 5. 登录后置处理
-        await handler.post_login(request, client, http_request)
+            # 5. 登录后置处理
+            print(f"DEBUG: 执行登录后置处理")
+            await handler.post_login(request, client, http_request)
+            print(f"DEBUG: 登录后置处理完成")
 
-        return login_resp
+            print(f"DEBUG: AuthService.login 完成")
+            return login_resp
+            
+        except Exception as e:
+            print(f"DEBUG: AuthService.login 发生异常: {type(e).__name__}: {str(e)}")
+            import traceback
+            print(f"DEBUG: AuthService 异常堆栈: {traceback.format_exc()}")
+            raise  # 重新抛出异常
     
     async def logout(self, token: str) -> bool:
         """
@@ -218,13 +244,23 @@ class AuthService:
         Returns:
             List[Dict[str, Any]]: 用户路由树
         """
+        print(f"🔍 开始构建用户 {user_id} 的路由树")
+        
         # 使用菜单服务构建用户路由树
         if self.menu_service:
+            print("📋 正在调用 menu_service.get_user_route_tree()")
             route_tree = await self.menu_service.get_user_route_tree(user_id)
+            print(f"📋 get_user_route_tree 返回了 {len(route_tree)} 个路由节点")
+            
             # 转换为前端路由格式
-            return self.menu_service.convert_to_route_format(route_tree)
+            print("🔄 正在转换为前端路由格式")
+            converted_routes = self.menu_service.convert_to_route_format(route_tree)
+            print(f"🔄 转换后得到 {len(converted_routes)} 个路由节点")
+            
+            return converted_routes
 
         # 如果没有菜单服务，返回默认路由树
+        print("⚠️ 菜单服务不可用，返回默认路由树")
         return [
             {
                 "path": "/system",
