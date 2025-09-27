@@ -6,6 +6,9 @@
 # 根父级 ID
 ROOT_PARENT_ID = 0
 
+# 权限常量（一比一复刻参考项目 SystemConstants.ALL_PERMISSION）
+ALL_PERMISSION = "*:*:*"
+
 
 # 布尔值常量（0 表示否，1 表示是）
 class Boolean:
@@ -25,5 +28,6 @@ class Boolean:
 
 __all__ = [
     "ROOT_PARENT_ID",
+    "ALL_PERMISSION",
     "Boolean",
 ]

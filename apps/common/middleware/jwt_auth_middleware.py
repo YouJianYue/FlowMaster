@@ -87,44 +87,25 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         """
         path = request.url.path
 
-        # 根路径特殊处理：只匹配完全相同的路径
-        if path == "/":
-            return False
+        # 检查配置文件中的排除路径
+        for exclude_path in self.exclude_paths:
+            exclude_path = exclude_path.strip()
+            if not exclude_path:
+                continue
 
-        # 健康检查等公开路径不需要认证
-        if path == "/health":
-            return False
-
-        # 验证码路径不需要认证
-        if path.startswith("/captcha"):
-            return False
-
-        # 系统公共字典选项不需要认证
-        if path.startswith("/system/common/dict/option"):
-            return False
-
-        # 租户公共接口不需要认证
-        if path.startswith("/tenant/common"):
-            return False
-
-        # 检查排除路径（排除根路径，避免误匹配）
-        exclude_paths_filtered = [ep for ep in self.exclude_paths if ep != "/"]
-
-        for exclude_path in exclude_paths_filtered:
-            # 支持通配符匹配
-            if exclude_path.endswith("/**"):
-                # 匹配路径前缀，例如 /captcha/** 匹配 /captcha/generate
-                prefix = exclude_path[:-3]  # 移除 '/**'
-                if path.startswith(prefix):  # 简化逻辑：只要以prefix开头就匹配
-                    return False
-            elif exclude_path.endswith("/*"):
-                # 匹配单级通配符，例如 /*.html 匹配 /index.html
-                prefix = exclude_path[:-2]  # 移除 '/*'
-                if path.startswith(prefix + "/") and "/" not in path[len(prefix)+1:]:
-                    return False
-            elif path.startswith(exclude_path):
-                # 普通前缀匹配
+            # 完全匹配
+            if path == exclude_path:
                 return False
+
+            # 通配符匹配
+            if exclude_path.endswith('/**'):
+                prefix = exclude_path[:-3]  # 移除 /**
+                if path.startswith(prefix):
+                    return False
+            elif exclude_path.endswith('/*'):
+                prefix = exclude_path[:-2]  # 移除 /*
+                if path.startswith(prefix + '/') and path.count('/') == prefix.count('/') + 1:
+                    return False
 
         return True
     

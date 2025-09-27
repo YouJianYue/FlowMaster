@@ -9,9 +9,12 @@ import warnings
 from typing import Optional
 from datetime import datetime, timedelta, UTC
 from jose import JWTError, jwt
-# 抑制 passlib 的 crypt 废弃警告
+# 抑制 passlib 和 bcrypt 相关警告
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", DeprecationWarning)
+    warnings.simplefilter("ignore", UserWarning)
+    # 专门抑制 bcrypt 版本相关警告
+    warnings.filterwarnings("ignore", message=".*bcrypt.*", category=Warning)
     from passlib.context import CryptContext
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

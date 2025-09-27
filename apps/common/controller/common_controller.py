@@ -4,12 +4,12 @@
 系统公共接口控制器
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Path
 from fastapi.responses import JSONResponse
 from typing import Optional
 
 from apps.common.config.logging import get_logger
-from apps.common.models.api_response import ApiResponse, create_success_response
+from apps.common.models.api_response import ApiResponse, create_success_response, create_error_response
 
 logger = get_logger(__name__)
 
@@ -17,7 +17,39 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/system/common", tags=["系统公共接口"])
 
 
-@router.get("/dict/option/site", summary="获取网站配置选项")
+@router.get("/dict/{code}", summary="查询字典")
+async def list_dict(code: str = Path(..., description="字典编码", example="notice_type")):
+    """
+    查询字典列表
+    一比一复刻参考项目 CommonController.listDict()
+
+    Args:
+        code: 字典编码
+
+    Returns:
+        字典项列表
+    """
+    try:
+        logger.info(f"开始查询字典: {code}")
+
+        # TODO: 实现字典服务调用
+        # 参考项目: return dictItemService.listByDictCode(code);
+        from apps.system.core.service.dict_item_service import get_dict_item_service
+
+        dict_service = get_dict_item_service()
+        dict_items = await dict_service.list_by_dict_code(code)
+
+        logger.info(f"字典查询成功: {code}, 数据量: {len(dict_items) if dict_items else 0}")
+
+        # 使用 create_success_response 包装响应，现在有异常捕获了
+        return create_success_response(data=dict_items)
+
+    except Exception as e:
+        logger.error(f"查询字典失败 {code}: {str(e)}", exc_info=True)
+        return create_error_response(f"查询字典失败: {str(e)}")
+
+
+@router.get("/dict/option/site", summary="查询系统配置参数", response_model=dict)
 async def get_site_dict_options():
     """
     获取网站配置字典选项

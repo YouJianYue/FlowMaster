@@ -22,29 +22,10 @@ class DashboardServiceImpl(DashboardService):
     async def list_notice(self) -> List[DashboardNoticeResp]:
         """
         查询公告列表
-        
+
         Returns:
             List[DashboardNoticeResp]: 公告列表
         """
         # TODO: 实现实际的数据库查询逻辑
-        # 目前返回模拟数据
-        return [
-            DashboardNoticeResp(
-                id=1,
-                title="系统维护通知",
-                type="1",
-                is_top=True
-            ),
-            DashboardNoticeResp(
-                id=2,
-                title="新功能上线公告",
-                type="2", 
-                is_top=False
-            ),
-            DashboardNoticeResp(
-                id=3,
-                title="安全升级提醒",
-                type="1",
-                is_top=False
-            )
-        ]
+        # 暂时返回空列表，避免频繁访问
+        return []

@@ -156,6 +156,25 @@ class UserServiceImpl(UserService):
             self.logger.error(f"获取用户详情失败: {e}")
             raise
 
+    async def get(self, user_id: Union[int, str]) -> Optional['UserEntity']:
+        """
+        根据用户ID获取用户实体
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            Optional[UserEntity]: 用户实体，不存在则返回None
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                from apps.system.core.model.entity.user_entity import UserEntity
+                user = await session.get(UserEntity, int(user_id))
+                return user
+        except Exception as e:
+            self.logger.error(f"根据ID获取用户失败: {e}")
+            return None
+
     async def update_user(self, user_id: Union[int, str], update_req: UserUpdateReq):
         """
         更新用户信息 - 基于参考项目的update逻辑

@@ -21,7 +21,7 @@ class AppConfig(BaseSettings):
 
     # JWT认证中间件配置
     jwt_exclude_paths: str = Field(
-        default="/docs,/redoc,/openapi.json,/health,/db/status,/auth/login,/auth/refresh,/captcha,/captcha/**,/system/common/dict/option/**,/tenant/common/**,/*.html,/*/*.html,/*/*.css,/*/*.js,/favicon.ico,/websocket/**,/file/**,/",
+        default="/docs,/redoc,/openapi.json,/health,/db/status,/auth/login,/auth/refresh,/auth/check,/auth/social/authorize,/captcha,/captcha/**,/system/common/dict/**,/common/dict/**,/tenant/common/**,/*.html,/*/*.html,/*/*.css,/*/*.js,/favicon.ico,/websocket/**,/file/**,/",
         description="JWT认证排除路径（用逗号分隔）"
     )
 

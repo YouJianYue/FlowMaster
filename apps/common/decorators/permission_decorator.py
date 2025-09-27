@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-权限控制中间件和装饰器
+权限控制装饰器
 
 实现类似 Java @SaCheckPermission 的权限验证功能
 @author: FlowMaster
@@ -176,23 +176,3 @@ async def check_permission_dependency(permission: str):
             detail={"message": "权限不足", "required_permission": permission}
         )
     return True
-
-
-# 权限中间件类 (可选，用于全局权限控制)
-class PermissionMiddleware:
-    """权限控制中间件"""
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            request = Request(scope, receive)
-
-            # 这里可以添加全局权限逻辑
-            # 例如：检查某些路径的通用权限
-
-            # 暂时直接通过，具体权限由装饰器控制
-            pass
-
-        await self.app(scope, receive, send)

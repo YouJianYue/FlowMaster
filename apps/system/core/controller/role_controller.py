@@ -12,7 +12,7 @@
 from typing import List, Dict, Any
 from fastapi import APIRouter, Path, Body, Depends, HTTPException
 from apps.common.base.controller.base_controller import BaseController, PageQuery, SortQuery, IdsReq
-from apps.common.middleware.permission_middleware import require_permission
+from apps.common.decorators import require_permission
 from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.common.models.page_resp import PageResp
 from apps.common.enums.data_scope_enum import DataScopeEnum
@@ -95,35 +95,33 @@ class RoleController(BaseController):
         if not role:
             return None
 
-        # 查询角色关联的菜单ID
-        from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
-        from sqlalchemy import select
-        from apps.common.config.database.database_session import DatabaseSession
-
-        # 获取数据库会话并查询角色菜单关联
+        # 查询角色关联的菜单ID - 针对超级管理员特殊处理
         try:
-            async with DatabaseSession.get_session_context() as session:
-                # 查询角色关联的菜单ID列表
-                stmt = select(RoleMenuEntity.menu_id).where(RoleMenuEntity.role_id == entity_id)
-                result = await session.execute(stmt)
-                menu_ids = [row[0] for row in result.fetchall()]
+            if role.code == "super_admin":
+                # 超级管理员返回所有启用菜单的ID
+                menu_ids = await self.role_service.get_all_menu_ids()
+                self.logger.info(f"超级管理员角色{entity_id}拥有所有菜单权限: {len(menu_ids)}个菜单")
+            else:
+                # 普通角色从角色菜单关联表查询
+                menu_ids = await self.role_service.get_role_menu_ids(entity_id)
+                self.logger.info(f"角色{entity_id}关联的菜单ID: {menu_ids}")
         except Exception as e:
-            self.logger.warning(f"查询角色菜单关联失败: {e}")
+            self.logger.error(f"查询角色菜单关联失败: {e}", exc_info=True)
             menu_ids = []  # 失败时返回空列表
 
-        # 转换为详情响应模型
+        # 转换为详情响应模型 - 一比一复刻参考项目格式
         role_detail = RoleDetailResp(
-            id=str(role.id),
+            id=role.id,  # 保持原始数字类型，不转换为字符串
             name=role.name,
             code=role.code,
             description=role.description,
-            data_scope=DataScopeEnum.from_value_code(role.data_scope),
+            data_scope=DataScopeEnum.from_value_code(role.data_scope).value_code,  # 使用.value_code返回数字
             sort=role.sort,
             is_system=role.is_system,
-            menu_check_strictly=False,  # TODO: 从角色扩展信息获取
-            dept_check_strictly=False,  # TODO: 从角色扩展信息获取
+            menu_check_strictly=True,  # 参考项目默认为true
+            dept_check_strictly=True,  # 参考项目默认为true
             menu_ids=menu_ids,
-            dept_ids=[],  # TODO: 从角色部门关联获取
+            dept_ids=None,  # 参考项目返回null而不是空数组
             disabled=role.is_system,  # 系统内置角色不可操作
             create_user_string="超级管理员",
             create_time=role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,
@@ -242,6 +240,8 @@ async def get_role(role_id: int = Path(..., description="ID", example=1)):
     继承自 BaseController 的标准 get 方法
     """
     result = await role_controller.get(role_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="角色不存在")
     return create_success_response(data=result)
 
 
@@ -351,7 +351,7 @@ async def list_permission_tree():
     return create_success_response(data=formatted_tree)
 
 
-@router.put("/{role_id}/permission", response_model=ApiResponse[None], summary="修改权限")
+@router.put("/{role_id}/permission", summary="修改权限")
 @require_permission("system:role:updatePermission")
 async def update_permission(
         role_id: int = Path(..., description="ID", example=1),
@@ -373,12 +373,11 @@ async def update_permission(
     )
     if not success:
         raise HTTPException(status_code=400, detail="修改权限失败")
-    return create_success_response(data=None)
 
 
 # ==================== 用户角色管理接口 ====================
 
-@router.get("/{role_id}/user", response_model=ApiResponse[PageResp[RoleUserResp]], summary="分页查询关联用户")
+@router.get("/{role_id}/user", response_model=PageResp[RoleUserResp], summary="分页查询关联用户")
 @require_permission("system:role:list")
 async def page_user(
         role_id: int = Path(..., description="ID", example=1),
@@ -397,10 +396,10 @@ async def page_user(
     # 设置角色ID到查询条件
     query.role_id = role_id
     result = await role_controller.user_role_service.page_user(query, page_query)
-    return create_success_response(data=result)
+    return result
 
 
-@router.post("/{role_id}/user", response_model=ApiResponse[None], summary="分配用户")
+@router.post("/{role_id}/user", summary="分配用户")
 @require_permission("system:role:assign")
 async def assign_to_users(
         role_id: int = Path(..., description="ID", example=1),
@@ -422,10 +421,8 @@ async def assign_to_users(
     if not success:
         raise HTTPException(status_code=400, detail="分配用户失败")
 
-    return create_success_response(data=None)
 
-
-@router.delete("/user", response_model=ApiResponse[None], summary="取消分配用户")
+@router.delete("/user", summary="取消分配用户")
 @require_permission("system:role:unassign")
 async def unassign_from_users(
         user_role_ids: List[int] = Body(..., description="用户角色关联ID列表", example=[1, 2, 3])):
@@ -445,10 +442,8 @@ async def unassign_from_users(
     if not success:
         raise HTTPException(status_code=400, detail="取消分配用户失败")
 
-    return create_success_response(data=None)
 
-
-@router.get("/{role_id}/user/id", response_model=ApiResponse[List[int]], summary="查询关联用户ID")
+@router.get("/{role_id}/user/id", response_model=List[int], summary="查询关联用户ID")
 @require_permission("system:role:list")
 async def list_user_id(role_id: int = Path(..., description="ID", example=1)):
     """
@@ -461,4 +456,4 @@ async def list_user_id(role_id: int = Path(..., description="ID", example=1)):
     public List<Long> listUserId(@PathVariable("id") Long id)
     """
     result = await role_controller.user_role_service.list_user_id_by_role_id(role_id)
-    return create_success_response(data=result)
+    return result

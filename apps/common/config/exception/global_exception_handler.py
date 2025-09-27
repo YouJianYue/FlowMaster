@@ -29,6 +29,14 @@ class BusinessException(CustomBaseException):
         super().__init__(message)
 
 
+class ValidationFailedException(CustomBaseException):
+    """验证失败异常 - 返回HTTP 200但code为400"""
+
+    def __init__(self, message: str = "验证失败", code: str = "400"):
+        self.code = code
+        super().__init__(message)
+
+
 class BadRequestException(CustomBaseException):
     """错误请求异常"""
 
@@ -38,6 +46,21 @@ class BadRequestException(CustomBaseException):
 
 class GlobalExceptionHandler:
     """全局异常处理器"""
+
+    @staticmethod
+    async def validation_failed_exception_handler(request: Request, exc: ValidationFailedException) -> JSONResponse:
+        """验证失败异常处理 - 返回HTTP 200但code为400"""
+        logger.info(f"[{request.method}] {request.url.path}: {exc.message}")  # 使用info级别，不是error
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,  # HTTP状态码200
+            content={
+                "success": False,
+                "code": exc.code,  # 响应体中的code为400
+                "msg": exc.message,
+                "data": None,
+                "timestamp": int(__import__('time').time() * 1000)
+            }
+        )
 
     @staticmethod
     async def base_exception_handler(request: Request, exc: CustomBaseException) -> JSONResponse:
@@ -153,6 +176,7 @@ def register_exception_handlers(app):
     # 自定义异常
     app.add_exception_handler(CustomBaseException, GlobalExceptionHandler.base_exception_handler)
     app.add_exception_handler(BusinessException, GlobalExceptionHandler.business_exception_handler)
+    app.add_exception_handler(ValidationFailedException, GlobalExceptionHandler.validation_failed_exception_handler)
     app.add_exception_handler(BadRequestException, GlobalExceptionHandler.bad_request_exception_handler)
 
     # FastAPI内置异常

@@ -266,6 +266,51 @@ class RoleService:
             self.logger.error(f"获取超级管理员权限失败: {str(e)}", exc_info=True)
             return set()
 
+    async def get_all_menu_ids(self) -> List[int]:
+        """
+        获取所有启用菜单的ID列表（用于超级管理员）
+
+        Returns:
+            List[int]: 所有启用菜单的ID列表
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 查询所有启用菜单的ID
+                stmt = select(MenuEntity.id).where(MenuEntity.status == 1).order_by(MenuEntity.id)
+                result = await session.execute(stmt)
+                menu_ids = [row[0] for row in result.fetchall()]
+
+                self.logger.debug(f"所有启用菜单ID: {menu_ids}")
+                return menu_ids
+
+        except Exception as e:
+            self.logger.error(f"获取所有菜单ID列表失败: {str(e)}", exc_info=True)
+            return []
+
+    async def get_role_menu_ids(self, role_id: int) -> List[int]:
+        """
+        获取角色关联的菜单ID列表
+
+        Args:
+            role_id: 角色ID
+
+        Returns:
+            List[int]: 菜单ID列表
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 查询角色关联的菜单ID列表
+                stmt = select(RoleMenuEntity.menu_id).where(RoleMenuEntity.role_id == role_id)
+                result = await session.execute(stmt)
+                menu_ids = [row[0] for row in result.fetchall()]
+
+                self.logger.debug(f"角色 {role_id} 关联的菜单ID: {menu_ids}")
+                return menu_ids
+
+        except Exception as e:
+            self.logger.error(f"获取角色菜单ID列表失败: {str(e)}", exc_info=True)
+            return []
+
     async def list_roles_with_pagination(self, page: int = 1, size: int = 10, **filters) -> 'PageResp':
         """
         分页查询角色列表 - 返回分页格式
@@ -746,22 +791,28 @@ class RoleService:
                 result = await session.execute(base_stmt)
                 roles = result.scalars().all()
 
-                # 转换为响应模型
+                # 转换为响应模型 - 一比一复刻参考项目格式
                 role_list = []
                 for role in roles:
+                    # 一比一复刻参考项目的ID类型处理逻辑
+                    # 小整数保持int类型，大整数（雪花ID）转为string避免精度丢失
+                    role_id = role.id
+                    if role_id > 2**53 - 1:  # JavaScript安全整数范围
+                        role_id = str(role_id)
+
                     role_resp = RoleResp(
-                        id=str(role.id),
+                        id=role_id,  # 参考项目的混合ID类型
                         name=role.name,
                         code=role.code,
                         description=role.description,
-                        data_scope=DataScopeEnum.from_value_code(role.data_scope),
+                        data_scope=role.data_scope,  # 参考项目：直接返回整数值，不转枚举
                         sort=role.sort,
                         is_system=role.is_system,
                         create_user_string="超级管理员",  # TODO: 从用户表关联查询
-                        create_time=role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,
+                        create_time=role.create_time.strftime("%Y-%m-%d %H:%M:%S") if role.create_time else None,  # 参考项目格式
                         update_user_string=None,
-                        update_time=role.update_time.strftime("%Y-%m-%d %H:%M:%S") if role.update_time else None,
-                        disabled=False
+                        update_time=role.update_time.strftime("%Y-%m-%d %H:%M:%S") if role.update_time else None
+                        # 移除disabled字段，参考项目没有这个字段
                     )
                     role_list.append(role_resp)
 

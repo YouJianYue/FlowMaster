@@ -16,7 +16,7 @@ class LoggingConfig(BaseSettings):
     """日志配置类"""
     
     level: str = Field(
-        default="INFO", 
+        default="DEBUG",
         description="日志级别"
     )
     file_path: str = Field(
@@ -136,13 +136,23 @@ class FlowMasterLogger:
         # aiosqlite 日志 - 关闭DEBUG输出
         logging.getLogger('aiosqlite').setLevel(logging.WARNING)
 
-        # FastAPI/Uvicorn 日志
-        logging.getLogger('uvicorn.access').setLevel(logging.INFO)
-        logging.getLogger('uvicorn.error').setLevel(logging.INFO)
+        # FastAPI/Uvicorn 日志接管 - 核心解决方案
+        # 让 uvicorn 的所有日志都通过我们的日志系统输出
+        uvicorn_loggers = ['uvicorn', 'uvicorn.access', 'uvicorn.error', 'uvicorn.asgi']
+        for logger_name in uvicorn_loggers:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.INFO)
+            logger.propagate = True  # 传播到 root logger，使用我们的格式
+            # 完全清空 uvicorn 的 handlers，防止重复输出
+            if logger.handlers:
+                logger.handlers.clear()
 
         # HTTP 客户端日志
         logging.getLogger('httpx').setLevel(logging.WARNING)
         logging.getLogger('asyncio').setLevel(logging.WARNING)
+
+        # 其他第三方库日志
+        logging.getLogger('passlib').setLevel(logging.ERROR)  # 完全抑制 passlib 警告日志
     
     def get_logger(self, name: str) -> logging.Logger:
         """获取指定名称的logger"""

@@ -5,8 +5,8 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
-from fastapi import HTTPException, status
+from typing import TYPE_CHECKING, Dict, Any
+from fastapi import HTTPException, status, Request
 from apps.system.auth.enums.auth_enums import AuthTypeEnum
 from apps.system.auth.model.req.login_req import LoginReq
 from apps.system.auth.model.resp.auth_resp import LoginResp, UserInfoResp
@@ -15,45 +15,56 @@ from apps.common.context.user_context import UserContext
 from apps.common.context.user_context_holder import UserContextHolder
 from apps.common.enums.dis_enable_status_enum import DisEnableStatusEnum
 
+if TYPE_CHECKING:
+    from apps.system.core.model.resp.client_resp import ClientResp
+
 
 class AbstractLoginHandler(ABC):
-    """抽象登录处理器"""
+    """抽象登录处理器 - 一比一复刻参考项目LoginHandler接口"""
 
     @abstractmethod
-    async def login(self, request: LoginReq, client_info: Dict[str, Any], extra_info: Dict[str, Any]) -> LoginResp:
+    async def login(self, request: LoginReq, client: 'ClientResp', http_request: Request) -> LoginResp:
         """
-        执行登录逻辑
-        
+        登录 - 一比一复刻参考项目LoginHandler接口
+
         Args:
-            request: 登录请求
-            client_info: 客户端信息
-            extra_info: 额外信息 (IP、浏览器等)
-            
+            request: 登录请求参数
+            client: 客户端信息
+            http_request: HTTP请求对象
+
         Returns:
             LoginResp: 登录响应
         """
         pass
 
-    @abstractmethod
-    def get_auth_type(self) -> AuthTypeEnum:
-        """获取认证类型"""
+    async def pre_login(self, request: LoginReq, client: 'ClientResp', http_request: Request) -> None:
+        """
+        登录前置处理 - 一比一复刻参考项目LoginHandler接口
+
+        Args:
+            request: 登录请求参数
+            client: 客户端信息
+            http_request: HTTP请求对象
+        """
+        # 验证码校验 - 复刻参考项目逻辑
+        await self._validate_captcha(request)
+
+    async def post_login(self, request: LoginReq, client: 'ClientResp', http_request: Request) -> None:
+        """
+        登录后置处理 - 一比一复刻参考项目LoginHandler接口
+
+        Args:
+            request: 登录请求参数
+            client: 客户端信息
+            http_request: HTTP请求对象
+        """
+        # 默认实现为空，子类可以重写
         pass
 
-    @staticmethod
-    async def pre_login(request: LoginReq, _client_info: Dict[str, Any], _extra_info: Dict[str, Any]):
-        """
-        登录前置处理
-        """
-        # 启用验证码校验 - 完全复刻参考项目
-        await AbstractLoginHandler._validate_captcha(request)
-
-    @staticmethod
-    async def post_login(user_context: UserContext, _login_resp: LoginResp, extra_info: Dict[str, Any]):
-        """
-        登录后置处理
-        """
-        # 记录登录日志
-        await AbstractLoginHandler._log_login_success(user_context, extra_info)
+    @abstractmethod
+    def get_auth_type(self) -> AuthTypeEnum:
+        """获取认证类型 - 一比一复刻参考项目LoginHandler接口"""
+        pass
 
     @staticmethod
     def check_user_status(user: 'UserEntity'):
@@ -65,7 +76,6 @@ class AbstractLoginHandler(ABC):
         Args:
             user: 用户实体
         """
-        from apps.system.core.model.entity.user_entity import UserEntity
 
         # 检查用户是否被禁用
         if user.status == DisEnableStatusEnum.DISABLE:
@@ -91,9 +101,6 @@ class AbstractLoginHandler(ABC):
         Returns:
             LoginResp: 登录响应
         """
-        from apps.system.core.model.entity.user_entity import UserEntity
-        from apps.system.core.model.entity.client_entity import ClientEntity
-        import copy
 
         # 检查用户状态
         AbstractLoginHandler.check_user_status(user)
@@ -107,7 +114,7 @@ class AbstractLoginHandler(ABC):
 
         permissions = await RolePermissionService.list_permission_by_user_id(user_id)
         roles = await RolePermissionService.list_by_user_id(user_id)
-        password_expiration_days = 90  # TODO: 从OptionService获取PASSWORD_EXPIRATION_DAYS
+        password_expiration_days = 0  # TODO: 从OptionService获取PASSWORD_EXPIRATION_DAYS（0表示永不过期，匹配参考项目默认值）
 
         # 创建完整的用户上下文 (复刻参考项目的UserContext构造)
         user_context = UserContext(
@@ -171,7 +178,7 @@ class AbstractLoginHandler(ABC):
             permissions=list(user_context.permissions),
             roles=list(user_context.role_codes),
             is_super_admin=user_context.is_super_admin,
-            is_pwd_expired=user_context.is_password_expired()
+            is_pwd_expired=user_context.is_password_expired
         )
 
         return LoginResp(
@@ -186,9 +193,10 @@ class AbstractLoginHandler(ABC):
 
     @staticmethod
     async def _validate_captcha(request: LoginReq):
-        """验证码校验"""
+        """验证码校验 - 一比一复刻参考项目AccountLoginHandler.preLogin方法"""
         # 导入验证码缓存（避免循环导入）
         from apps.common.controller.captcha_controller import captcha_cache
+        from apps.common.util.validation_utils import ValidationUtils, CaptchaConstants
         from datetime import datetime
 
         # 只对账号登录进行验证码校验（参考项目中的逻辑）
@@ -200,11 +208,9 @@ class AbstractLoginHandler(ABC):
         if not hasattr(request, 'uuid') or not request.uuid:
             return
 
-        if not hasattr(request, 'captcha') or not request.captcha:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="请输入验证码"
-            )
+        # 使用ValidationUtils进行验证码校验 - 复刻参考项目逻辑
+        ValidationUtils.throw_if_blank(request.captcha, "验证码不能为空")
+        ValidationUtils.throw_if_blank(request.uuid, "验证码标识不能为空")
 
         # 清理过期验证码
         current_time = datetime.now()
@@ -218,21 +224,18 @@ class AbstractLoginHandler(ABC):
         # 构造验证码缓存键（与验证码生成时的格式保持一致）
         captcha_key = f"captcha:{request.uuid}"
 
-        # 检查验证码UUID是否存在
+        # 检查验证码UUID是否存在并获取缓存的验证码
         if captcha_key not in captcha_cache:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="验证码已过期或不存在，请重新获取"
-            )
+            ValidationUtils.throw_if_blank("", CaptchaConstants.CAPTCHA_EXPIRED)
 
         cached_data = captcha_cache[captcha_key]
+        captcha_code = cached_data['code']
 
-        # 验证验证码（忽略大小写）
-        if request.captcha.lower() != cached_data['code']:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="验证码错误，请重新输入"
-            )
+        # 验证验证码是否存在
+        ValidationUtils.throw_if_blank(captcha_code, CaptchaConstants.CAPTCHA_EXPIRED)
+
+        # 验证验证码是否正确（忽略大小写）- 复刻参考项目逻辑
+        ValidationUtils.throw_if_not_equal_ignore_case(request.captcha, captcha_code, CaptchaConstants.CAPTCHA_ERROR)
 
         # 验证成功，删除验证码（一次性使用）
         del captcha_cache[captcha_key]

@@ -56,10 +56,20 @@ class UserContext(BaseModel):
         else:
             self.role_codes = set()
     
+    @property
     def is_password_expired(self) -> bool:
         """
-        检查密码是否过期
-        
+        密码是否已过期（属性方式访问）
+
+        Returns:
+            true-已过期；false-未过期
+        """
+        return self.is_password_expired_user()
+
+    def is_password_expired_user(self) -> bool:
+        """
+        密码是否已过期（方法方式访问，保持向后兼容）
+
         Returns:
             密码是否过期
         """
@@ -69,7 +79,7 @@ class UserContext(BaseModel):
         # 如果未设置密码重置时间，说明用户从未重置密码，不过期
         if self.pwd_reset_time is None:
             return False
-        
+
         from datetime import timedelta
         expiration_date = self.pwd_reset_time + timedelta(days=self.password_expiration_days)
         return expiration_date < datetime.now()

@@ -7,7 +7,7 @@
 @since: 2025/9/18
 """
 
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel, Field
 from pydantic.alias_generators import to_camel
 from pydantic import ConfigDict
@@ -27,7 +27,7 @@ class RoleResp(BaseDetailResponse):
         populate_by_name=True,
         json_schema_extra={
             "example": {
-                "id": "1",
+                "id": 1,
                 "name": "测试人员",
                 "code": "test",
                 "dataScope": 5,
@@ -37,10 +37,15 @@ class RoleResp(BaseDetailResponse):
                 "createTime": "2023-08-14 08:54:38",
                 "updateTime": "2023-08-14 08:54:38",
                 "createUserString": "超级管理员",
-                "updateUserString": None,
-                "disabled": False
+                "updateUserString": None
             }
         }
+    )
+
+    # 重写ID字段 - 支持参考项目的混合类型：小整数保持int，大整数转string
+    id: Union[int, str] = Field(
+        description="角色ID - 一比一复刻参考项目格式",
+        examples=[1, "547888897925840927"]
     )
 
     # 名称
@@ -55,10 +60,10 @@ class RoleResp(BaseDetailResponse):
         examples=["test"]
     )
 
-    # 数据权限
-    data_scope: DataScopeEnum = Field(
+    # 数据权限 - 一比一复刻参考项目：整数类型
+    data_scope: int = Field(
         description="数据权限",
-        examples=[DataScopeEnum.SELF]
+        examples=[1]
     )
 
     # 排序
@@ -113,10 +118,10 @@ class RoleDetailResp(BaseDetailResponse):
         }
     )
 
-    # 重写ID字段为字符串类型（保持与其他模块一致）
-    id: str = Field(
-        description="角色ID（字符串类型）",
-        examples=["1"]
+    # 重写ID字段 - 一比一复刻参考项目：支持int类型
+    id: Union[int, str] = Field(
+        description="角色ID - 一比一复刻参考项目格式",
+        examples=[1, "547888897925840927"]
     )
 
     # 名称
@@ -131,10 +136,10 @@ class RoleDetailResp(BaseDetailResponse):
         examples=["test"]
     )
 
-    # 数据权限
-    data_scope: DataScopeEnum = Field(
+    # 数据权限 - 一比一复刻参考项目：整数类型
+    data_scope: Union[int, DataScopeEnum] = Field(
         description="数据权限",
-        examples=[DataScopeEnum.SELF]
+        examples=[1]
     )
 
     # 排序
@@ -177,9 +182,9 @@ class RoleDetailResp(BaseDetailResponse):
         examples=[[1000, 1010, 1011, 1012, 1013, 1014]]
     )
 
-    # 权限范围：部门 ID 列表
+    # 权限范围：部门 ID 列表 - 一比一复刻参考项目：可以为null
     dept_ids: Optional[List[int]] = Field(
-        default_factory=list,
+        default=None,
         description="权限范围：部门 ID 列表",
         examples=[[5]]
     )

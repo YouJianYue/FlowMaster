@@ -2,7 +2,7 @@
 
 """
 认证服务实例管理器
-临时解决方案，用于管理服务依赖关系
+用于管理服务依赖关系和提供依赖注入支持
 """
 
 from typing import Optional
@@ -56,12 +56,11 @@ def get_auth_service() -> AuthService:
     """
     获取认证服务实例的全局函数
 
+    Note:
+        这个函数主要用于依赖注入系统，通过 get_auth_service_dep() 调用
+        不建议在业务代码中直接使用，应该使用 FastAPI 的 Depends 机制
+
     Returns:
         AuthService: 认证服务实例
     """
     return AuthServiceManager.get_auth_service()
-
-
-# 创建默认的认证服务实例（临时方案）
-# 正式项目中应该使用FastAPI的依赖注入系统
-auth_service = AuthServiceManager.get_auth_service()

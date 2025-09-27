@@ -5,7 +5,7 @@
 """
 
 from typing import Dict, Any, Optional, List
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Request
 from apps.system.auth.handler.login_handler_factory import LoginHandlerFactory
 from apps.system.auth.enums.auth_enums import AuthTypeEnum
 from apps.system.auth.model.req.login_req import LoginRequestUnion, RefreshTokenReq, SocialLoginReq
@@ -33,49 +33,42 @@ class AuthService:
         self.menu_service = menu_service
         self.route_builder = RouteBuilder(menu_service) if menu_service else None
     
-    async def login(self, auth_type: AuthTypeEnum, request: LoginRequestUnion, 
-                   client_info: Dict[str, Any], extra_info: Dict[str, Any]) -> LoginResp:
+    async def login(self, request: LoginRequestUnion, http_request: Request) -> LoginResp:
         """
-        用户登录 - 支持多种登录方式（完全对应参考项目逻辑）
-        
+        用户登录 - 一比一复刻参考项目实现
+
         Args:
-            auth_type: 认证类型
             request: 登录请求
-            client_info: 客户端信息
-            extra_info: 额外信息
-            
+            http_request: HTTP请求对象
+
         Returns:
             LoginResp: 登录响应
         """
-        try:
-            # 1. 校验客户端（对应参考项目的客户端验证逻辑）
-            client_id = request.client_id
-            validated_client = await self.client_service.validate_client(client_id, auth_type.value)
-            
-            # 2. 更新客户端信息（添加验证后的完整信息）
-            client_info.update({
-                "client_type": validated_client.client_type,
-                "active_timeout": validated_client.active_timeout,
-                "timeout": validated_client.timeout,
-                "auth_types": validated_client.auth_type
-            })
-            
-            # 3. 获取对应的登录处理器
-            handler = LoginHandlerFactory.get_handler(auth_type)
-            
-            # 4. 执行登录（前置处理→认证→后置处理）
-            return await handler.login(request, client_info, extra_info)
-            
-        except BusinessException:
-            # 客户端验证异常直接抛出
-            raise
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"登录处理失败: {str(e)}"
-            )
+        # 一比一复刻参考项目AuthServiceImpl.login()实现
+        auth_type = request.auth_type
+
+        # 1. 校验客户端（对应参考项目的clientService.getByClientId()逻辑）
+        client = await self.client_service.get_by_client_id(request.client_id)
+        if not client:
+            raise BusinessException("客户端不存在")
+        if client.status == "DISABLE":  # 对应DisEnableStatusEnum.DISABLE
+            raise BusinessException("客户端已禁用")
+        if auth_type.value not in client.auth_type:
+            raise BusinessException(f"该客户端暂未授权 [{auth_type.value}] 认证")
+
+        # 2. 获取登录处理器（对应参考项目的loginHandlerFactory.getHandler()）
+        handler = LoginHandlerFactory.get_handler(auth_type)
+
+        # 3. 登录前置处理
+        await handler.pre_login(request, client, http_request)
+
+        # 4. 执行登录
+        login_resp = await handler.login(request, client, http_request)
+
+        # 5. 登录后置处理
+        await handler.post_login(request, client, http_request)
+
+        return login_resp
     
     async def logout(self, token: str) -> bool:
         """
@@ -161,7 +154,7 @@ class AuthService:
             "permissions": list(user_context.permissions),
             "roles": list(user_context.role_codes),
             "is_super_admin": user_context.is_super_admin,
-            "is_pwd_expired": user_context.is_password_expired(),
+            "is_pwd_expired": user_context.is_password_expired,
             "tenant_id": user_context.tenant_id,
             "dept_id": user_context.dept_id
         }

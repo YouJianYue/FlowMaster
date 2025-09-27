@@ -52,3 +52,50 @@ class UserService(ABC):
             UserDetailResp: 用户详情数据
         """
         pass
+
+    @abstractmethod
+    async def get(self, user_id: Union[int, str]) -> Optional['UserEntity']:
+        """
+        根据用户ID获取用户实体
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            Optional[UserEntity]: 用户实体，不存在则返回None
+        """
+        pass
+
+    @abstractmethod
+    async def update_user(self, user_id: Union[int, str], update_req: 'UserUpdateReq') -> None:
+        """
+        更新用户信息
+
+        Args:
+            user_id: 用户ID
+            update_req: 用户更新请求
+        """
+        pass
+
+    @abstractmethod
+    async def update_role(self, update_req: 'UserRoleUpdateReq', user_id: Union[int, str]) -> None:
+        """
+        分配用户角色
+
+        Args:
+            update_req: 用户角色更新请求
+            user_id: 用户ID
+        """
+        pass
+
+
+# 依赖注入函数
+def get_user_service() -> UserService:
+    """
+    获取用户服务实例（依赖注入）
+
+    Returns:
+        UserService: 用户服务实例
+    """
+    from apps.system.core.service.impl.user_service_impl import UserServiceImpl
+    return UserServiceImpl()

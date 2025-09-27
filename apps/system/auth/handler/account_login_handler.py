@@ -4,8 +4,8 @@
 账号密码登录处理器 - 对应参考项目的AccountLoginHandler
 """
 
-from typing import Dict, Any
-from fastapi import HTTPException, status
+from typing import TYPE_CHECKING, Dict, Any
+from fastapi import HTTPException, status, Request
 from apps.system.auth.handler.abstract_login_handler import AbstractLoginHandler
 from apps.system.auth.enums.auth_enums import AuthTypeEnum
 from apps.system.auth.model.req.login_req import AccountLoginReq
@@ -13,6 +13,9 @@ from apps.system.auth.model.resp.auth_resp import LoginResp
 from apps.system.auth.config.jwt_config import password_config
 from apps.system.core.model.entity.client_entity import ClientEntity
 from apps.system.core.model.entity.user_entity import UserEntity
+
+if TYPE_CHECKING:
+    from apps.system.core.model.resp.client_resp import ClientResp
 
 
 class AccountLoginHandler(AbstractLoginHandler):
@@ -22,52 +25,25 @@ class AccountLoginHandler(AbstractLoginHandler):
         """获取认证类型"""
         return AuthTypeEnum.ACCOUNT
 
-    async def login(self, request: AccountLoginReq, client_info: Dict[str, Any],
-                    extra_info: Dict[str, Any]) -> LoginResp:
+    async def login(self, request: AccountLoginReq, client: 'ClientResp', http_request: Request) -> LoginResp:
         """
-        执行账号密码登录
+        执行账号密码登录 - 一比一复刻参考项目
 
         Args:
             request: 账号登录请求
-            client_info: 客户端信息
-            extra_info: 额外信息
+            client: 客户端信息
+            http_request: HTTP请求对象
 
         Returns:
             LoginResp: 登录响应
         """
-        try:
-            # 前置处理
-            await AbstractLoginHandler.pre_login(request, client_info, extra_info)
+        # 验证用户凭据，获取UserEntity
+        user = await self._authenticate_user(request.username, request.password)
 
-            # 验证用户凭据，获取UserEntity
-            user = await self._authenticate_user(request.username, request.password)
+        # 执行认证并生成令牌 - 使用ClientResp而不是ClientEntity
+        login_resp = await AbstractLoginHandler.authenticate(user, client)
 
-            # 获取ClientEntity（临时使用字典创建对象，后续应该从数据库查询）
-            client = await self._get_client_entity(client_info)
-
-            # 执行认证并生成令牌
-            login_resp = await AbstractLoginHandler.authenticate(user, client)
-
-            # 获取当前用户上下文进行后置处理
-            from apps.common.context.user_context_holder import UserContextHolder
-            current_user_context = UserContextHolder.get_context()
-
-            # 后置处理
-            await AbstractLoginHandler.post_login(current_user_context, login_resp, extra_info)
-
-            return login_resp
-
-        except HTTPException:
-            # 记录登录失败日志
-            await self._log_login_failure(request.username, "认证失败", extra_info)
-            raise
-        except Exception as e:
-            # 记录登录失败日志
-            await self._log_login_failure(request.username, str(e), extra_info)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"登录失败: {str(e)}"
-            )
+        return login_resp
 
     async def _authenticate_user(self, username: str, password: str) -> 'UserEntity':
         """

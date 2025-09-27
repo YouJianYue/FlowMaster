@@ -4,16 +4,23 @@
 FlowMaster 应用主入口
 """
 
+import warnings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# 🔥 全局抑制 bcrypt 版本警告
+warnings.filterwarnings("ignore", message=".*bcrypt.*", category=Warning)
+warnings.filterwarnings("ignore", message=".*trapped.*error reading bcrypt version.*")
 
 # 🔥 首先加载环境变量 (必须在其他导入之前)
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# 导入路由
+# 🔥 在 FastAPI 应用创建之前就初始化日志系统
+from apps.common.config.logging import setup_logging
+setup_logging()  # 立即初始化，接管所有后续日志
 from apps.system.auth.controller.auth_controller import router as auth_router
 from apps.common.controller import captcha_router, common_router, tenant_router
 from apps.system.core.controller.user_message_controller import (
@@ -26,6 +33,8 @@ from apps.system.core.controller.menu_controller import router as menu_router
 from apps.system.core.controller.role_controller import router as role_router
 from apps.system.core.controller.common_controller import router as system_common_router
 from apps.system.core.controller.user_profile_controller import router as user_profile_router
+from apps.system.core.controller.notice_controller import router as notice_router
+from apps.system.core.controller.dict_controller import router as dict_router
 
 # 导入WebSocket路由 (修复循环导入问题后重新启用)
 from apps.common.websocket.websocket_controller import (
@@ -80,9 +89,8 @@ async def lifespan(_app: FastAPI):
         if not RsaProperties.PRIVATE_KEY or not RsaProperties.PUBLIC_KEY:
             logger.warning("RSA密钥未配置或加载失败！登录功能可能无法正常工作")
 
-        # 1. 初始化日志配置
-        logger.info("初始化日志配置...")
-        setup_logging()
+        # 1. 日志系统已在模块导入时初始化
+        logger.info("日志系统已就绪")
 
         # 2. 初始化数据库
         logger.info("初始化数据库...")
@@ -160,10 +168,12 @@ app.add_middleware(
     exclude_paths=app_config.jwt_exclude_paths_list,
 )
 
-# 注册路由
-app.include_router(auth_router)  # 认证路由
-app.include_router(captcha_router)  # 验证码路由
-app.include_router(common_router)  # 系统公共路由
+# 注册路由 - 按照参考项目设计
+app.include_router(auth_router)  # 认证路由 /auth
+app.include_router(captcha_router)  # 验证码路由 /common
+app.include_router(dict_router)  # 字典管理路由 /system/dict
+app.include_router(common_router)  # 公共路由 /system/common (包含字典查询)
+app.include_router(system_common_router)  # 系统通用路由 /system/common
 app.include_router(tenant_router)  # 租户管理路由
 app.include_router(user_message_router)  # 用户消息路由
 app.include_router(dashboard_router)  # 仪表盘路由
@@ -173,6 +183,7 @@ app.include_router(menu_router)  # 菜单管理路由
 app.include_router(role_router)  # 角色管理路由
 app.include_router(system_common_router)  # 系统通用路由
 app.include_router(user_profile_router)  # 个人信息路由
+app.include_router(notice_router)  # 通知公告路由
 
 # 注册WebSocket路由 (修复循环导入问题后重新启用)
 app.include_router(websocket_router)  # WebSocket连接路由
@@ -223,5 +234,7 @@ if __name__ == "__main__":
         host=app_config.app_host,
         port=app_config.app_port,
         reload=app_config.app_reload,
-        log_level="info"
+        log_level="info",
+        # 禁用 uvicorn 的默认日志配置，让我们的自定义配置接管
+        access_log=False,  # 禁用访问日志的默认输出
     )

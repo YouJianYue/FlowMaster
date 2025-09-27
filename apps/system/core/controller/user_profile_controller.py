@@ -15,6 +15,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.common.context.user_context_holder import UserContextHolder
+from apps.system.core.service.user_service import UserService, get_user_service
 from apps.common.config.logging import get_logger
 
 # 创建路由器
@@ -29,7 +30,9 @@ logger = get_logger(__name__)
 @router.patch("/avatar", response_model=ApiResponse[dict], summary="修改头像")
 async def update_avatar(
     avatar_file: UploadFile = File(..., description="头像文件"),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    # 注入用户服务
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     修改头像
@@ -59,9 +62,6 @@ async def update_avatar(
         # TODO: 实现文件上传逻辑
         # 对应参考项目: String newAvatar = userService.updateAvatar(avatarFile, UserContextHolder.getUserId());
 
-        from apps.system.core.service.user_service import get_user_service
-        user_service = get_user_service()
-
         # 暂时返回模拟数据，等待文件上传功能实现
         new_avatar = f"/avatar/{user_context.id}_{avatar_file.filename}"
 
@@ -76,7 +76,9 @@ async def update_avatar(
 async def update_basic_info(
     # TODO: 创建 UserBasicInfoUpdateReq 请求模型
     req: dict = Body(..., description="用户基础信息"),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    # 注入用户服务
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     修改基础信息
@@ -102,9 +104,6 @@ async def update_basic_info(
         # TODO: 实现基础信息更新逻辑
         # 对应参考项目: userService.updateBasicInfo(req, UserContextHolder.getUserId());
 
-        from apps.system.core.service.user_service import get_user_service
-        user_service = get_user_service()
-
         # 暂时返回成功，等待UserBasicInfoUpdateReq模型和服务方法实现
         logger.info(f"用户 {user_context.id} 更新基础信息: {req}")
 
@@ -119,7 +118,9 @@ async def update_basic_info(
 async def update_password(
     # TODO: 创建 UserPasswordUpdateReq 请求模型
     req: dict = Body(..., description="密码修改请求"),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    # 注入用户服务
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     修改密码
@@ -148,8 +149,7 @@ async def update_password(
         # String newPassword = SecureUtils.decryptPasswordByRsaPrivateKey(updateReq.getNewPassword(), "新密码解密失败");
         # userService.updatePassword(oldPassword, newPassword, UserContextHolder.getUserId());
 
-        from apps.system.core.service.user_service import get_user_service
-        user_service = get_user_service()
+        # 使用注入的用户服务
 
         # 暂时返回成功，等待RSA解密和密码更新逻辑实现
         logger.info(f"用户 {user_context.id} 修改密码")
@@ -165,7 +165,9 @@ async def update_password(
 async def update_phone(
     # TODO: 创建 UserPhoneUpdateReq 请求模型
     req: dict = Body(..., description="手机号修改请求"),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    # 注入用户服务
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     修改手机号
@@ -198,8 +200,7 @@ async def update_phone(
         # RedisUtils.delete(captchaKey);
         # userService.updatePhone(updateReq.getPhone(), oldPassword, UserContextHolder.getUserId());
 
-        from apps.system.core.service.user_service import get_user_service
-        user_service = get_user_service()
+        # 使用注入的用户服务
 
         # 暂时返回成功，等待验证码和手机号更新逻辑实现
         logger.info(f"用户 {user_context.id} 修改手机号")
@@ -215,7 +216,9 @@ async def update_phone(
 async def update_email(
     # TODO: 创建 UserEmailUpdateReq 请求模型
     req: dict = Body(..., description="邮箱修改请求"),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    # 注入用户服务
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     修改用户邮箱
@@ -248,8 +251,7 @@ async def update_email(
         # RedisUtils.delete(captchaKey);
         # userService.updateEmail(updateReq.getEmail(), oldPassword, UserContextHolder.getUserId());
 
-        from apps.system.core.service.user_service import get_user_service
-        user_service = get_user_service()
+        # 使用注入的用户服务
 
         # 暂时返回成功，等待验证码和邮箱更新逻辑实现
         logger.info(f"用户 {user_context.id} 修改邮箱")
