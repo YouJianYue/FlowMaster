@@ -3,7 +3,7 @@
 用户服务实现
 """
 
-from typing import Optional, Union
+from typing import Optional, Union, List
 from sqlalchemy import select, or_, func, delete
 
 from ..user_service import UserService
@@ -16,6 +16,8 @@ from apps.system.core.model.entity.user_role_entity import UserRoleEntity
 from apps.common.models.page_resp import PageResp
 from apps.common.config.database.database_session import DatabaseSession
 from apps.common.config.logging import get_logger
+from apps.common.context.user_context_holder import UserContextHolder
+from apps.common.config.exception.global_exception_handler import BusinessException
 
 
 class UserServiceImpl(UserService):
@@ -52,9 +54,15 @@ class UserServiceImpl(UserService):
                 # 构建查询条件
                 query = select(UserEntity)
 
-                # 添加部门过滤
+                # 添加部门过滤 - 递归查询子部门
                 if dept_id:
-                    query = query.where(UserEntity.dept_id == int(dept_id))
+                    # 获取该部门及其所有子部门的ID列表
+                    dept_ids = await self._get_dept_and_children_ids(session, int(dept_id))
+                    if dept_ids:
+                        query = query.where(UserEntity.dept_id.in_(dept_ids))
+                    else:
+                        # 如果没有找到部门，查询空结果
+                        query = query.where(UserEntity.dept_id == -1)
 
                 # 添加关键词搜索
                 if description:
@@ -82,8 +90,11 @@ class UserServiceImpl(UserService):
                 result = await session.execute(query)
                 users = result.scalars().all()
 
-                # 转换为响应模型
-                user_list = [self._entity_to_resp(user) for user in users]
+                # 转换为响应模型 - 查询真实的部门和角色信息
+                user_list = []
+                for user in users:
+                    user_resp = await self._entity_to_resp_with_relations(session, user)
+                    user_list.append(user_resp)
 
                 return PageResp(
                     list=user_list,  # 使用list字段，不是records
@@ -136,11 +147,11 @@ class UserServiceImpl(UserService):
                 roles_data = role_result.fetchall()
 
                 # 分别构建角色ID和角色名称列表
-                role_ids = [str(role_data.role_id) for role_data in roles_data]
+                role_ids = [role_data.role_id for role_data in roles_data]  # 保持数字类型，与分页查询一致
                 role_names = [role_data.name for role_data in roles_data]
 
                 # 查询部门名称
-                dept_name = "部门名称"  # 默认值
+                dept_name = "未知部门"  # 默认值，与分页查询保持一致
                 if user.dept_id:
                     from apps.system.core.model.entity.dept_entity import DeptEntity
                     dept_query = select(DeptEntity.name).where(DeptEntity.id == user.dept_id)
@@ -223,6 +234,11 @@ class UserServiceImpl(UserService):
                 await session.commit()
                 self.logger.info(f"用户更新成功: {user.username} (ID: {user_id})")
 
+                # 5. 如果是当前用户，更新上下文缓存 - 对应参考项目updateContext逻辑
+                current_user_id = UserContextHolder.get_user_id()
+                if current_user_id and int(user_id) == current_user_id:
+                    await self._update_context(int(user_id))
+
         except Exception as e:
             self.logger.error(f"用户更新失败: {e}")
             raise  # 重新抛出异常，确保控制器能感知到错误
@@ -259,9 +275,250 @@ class UserServiceImpl(UserService):
                 await session.commit()
                 self.logger.info(f"用户角色分配成功: 用户ID={user_id}, 角色数量={len(update_req.role_ids) if update_req.role_ids else 0}")
 
+                # 5. 如果是当前用户，更新上下文缓存 - 对应参考项目updateContext逻辑
+                current_user_id = UserContextHolder.get_user_id()
+                if current_user_id and int(user_id) == current_user_id:
+                    await self._update_context(int(user_id))
+
         except Exception as e:
             self.logger.error(f"用户角色分配失败: {e}")
             raise
+
+    async def delete(self, ids: List[Union[int, str]]):
+        """
+        批量删除用户 - 一比一复刻参考项目delete方法
+
+        Args:
+            ids: 用户ID列表
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 1. 检查不允许删除当前用户 - 对应参考项目 CheckUtils.throwIf(CollUtil.contains(ids, UserContextHolder.getUserId()))
+                current_user_id = UserContextHolder.get_user_id()
+                if current_user_id and current_user_id in [int(id_) for id_ in ids]:
+                    raise BusinessException("不允许删除当前用户")
+
+                # 2. 查询要删除的用户信息 - 对应参考项目 baseMapper.lambdaQuery().select().in().list()
+                int_ids = [int(id_) for id_ in ids]
+                users_query = select(UserEntity).where(UserEntity.id.in_(int_ids))
+                result = await session.execute(users_query)
+                users = result.scalars().all()
+
+                # 3. 检查用户是否存在 - 对应参考项目检查subtractIds
+                existing_ids = [user.id for user in users]
+                missing_ids = set(int_ids) - set(existing_ids)
+                if missing_ids:
+                    raise BusinessException(f"所选用户 [{','.join(map(str, missing_ids))}] 不存在")
+
+                # 4. 检查系统内置用户 - 对应参考项目检查isSystem
+                system_users = [user for user in users if user.is_system]
+                if system_users:
+                    system_names = [user.nickname for user in system_users]
+                    raise BusinessException(f"所选用户 [{','.join(system_names)}] 是系统内置用户，不允许删除")
+
+                # 5. 删除用户和角色关联 - 对应参考项目 userRoleService.deleteByUserIds(ids)
+                await session.execute(
+                    delete(UserRoleEntity).where(UserRoleEntity.user_id.in_(int_ids))
+                )
+
+                # 6. 删除用户 - 对应参考项目 super.delete(ids)
+                await session.execute(
+                    delete(UserEntity).where(UserEntity.id.in_(int_ids))
+                )
+
+                # 7. 提交事务
+                await session.commit()
+
+                # 8. 记录日志
+                deleted_names = [user.username for user in users]
+                self.logger.info(f"批量删除用户成功: {deleted_names}")
+
+        except Exception as e:
+            self.logger.error(f"批量删除用户失败: {e}")
+            raise
+
+    async def _update_context(self, user_id: int):
+        """
+        更新用户上下文缓存 - 对应参考项目updateContext方法
+
+        Args:
+            user_id: 用户ID
+        """
+        try:
+            # 获取用户上下文信息 - 对应参考项目 UserContextHolder.getContext(id)
+            user_context = UserContextHolder.get_context_by_user_id(user_id)
+            if user_context:
+                # 更新上下文 - 对应参考项目 UserContextHolder.setContext(userContext)
+                UserContextHolder.set_context(user_context)
+                self.logger.info(f"用户上下文更新成功: {user_id}")
+            else:
+                self.logger.warning(f"未找到用户上下文: {user_id}")
+
+        except Exception as e:
+            self.logger.error(f"更新用户上下文失败: {e}")
+            # 不抛出异常，避免影响主业务流程
+
+    async def get(self, user_id: Union[int, str]) -> Optional[UserEntity]:
+        """
+        根据ID获取用户实体
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            Optional[UserEntity]: 用户实体
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 查询用户信息
+                stmt = select(UserEntity).where(UserEntity.id == int(user_id))
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                return user
+        except Exception as e:
+            self.logger.error(f"获取用户信息失败: {e}")
+            return None
+
+    async def _get_dept_and_children_ids(self, session, dept_id: int) -> List[int]:
+        """
+        递归获取部门及其所有子部门的ID列表
+
+        Args:
+            session: 数据库会话
+            dept_id: 部门ID
+
+        Returns:
+            List[int]: 部门ID列表（包含自身和所有子部门）
+        """
+        try:
+            from apps.system.core.model.entity.dept_entity import DeptEntity
+
+            # 先检查该部门是否存在
+            dept_check = await session.get(DeptEntity, dept_id)
+            if not dept_check:
+                return []
+
+            # 初始化结果列表，包含当前部门
+            result_ids = [dept_id]
+
+            # 递归查询所有子部门
+            await self._collect_children_dept_ids(session, dept_id, result_ids)
+
+            return result_ids
+
+        except Exception as e:
+            self.logger.error(f"获取部门子部门ID失败: {e}")
+            return [dept_id]  # 出错时至少返回当前部门ID
+
+    async def _collect_children_dept_ids(self, session, parent_dept_id: int, result_ids: List[int]):
+        """
+        递归收集子部门ID
+
+        Args:
+            session: 数据库会话
+            parent_dept_id: 父部门ID
+            result_ids: 结果ID列表（会被修改）
+        """
+        try:
+            from apps.system.core.model.entity.dept_entity import DeptEntity
+
+            # 查询直接子部门
+            children_query = select(DeptEntity.id).where(DeptEntity.parent_id == parent_dept_id)
+            children_result = await session.execute(children_query)
+            children_ids = [row[0] for row in children_result.fetchall()]
+
+            # 将子部门ID添加到结果中
+            for child_id in children_ids:
+                if child_id not in result_ids:  # 避免重复
+                    result_ids.append(child_id)
+                    # 递归查询子部门的子部门
+                    await self._collect_children_dept_ids(session, child_id, result_ids)
+
+        except Exception as e:
+            self.logger.error(f"递归收集子部门ID失败: {e}")
+
+    async def _entity_to_resp_with_relations(self, session, entity: UserEntity) -> UserResp:
+        """
+        将用户实体转换为响应模型（查询真实的部门和角色信息）
+
+        Args:
+            session: 数据库会话
+            entity: 用户实体
+
+        Returns:
+            UserResp: 用户响应模型
+        """
+        try:
+            # 查询真实部门名称
+            dept_name = "未知部门"
+            if entity.dept_id:
+                from apps.system.core.model.entity.dept_entity import DeptEntity
+                dept_query = select(DeptEntity.name).where(DeptEntity.id == entity.dept_id)
+                dept_result = await session.execute(dept_query)
+                dept_name_result = dept_result.scalar_one_or_none()
+                if dept_name_result:
+                    dept_name = dept_name_result
+
+            # 查询用户角色信息
+            from apps.system.core.model.entity.role_entity import RoleEntity
+            role_query = (
+                select(UserRoleEntity.role_id, RoleEntity.name)
+                .join(RoleEntity, UserRoleEntity.role_id == RoleEntity.id)
+                .where(UserRoleEntity.user_id == entity.id)
+            )
+            role_result = await session.execute(role_query)
+            roles_data = role_result.fetchall()
+
+            # 构建角色ID和名称列表
+            role_ids = [role_data.role_id for role_data in roles_data]  # 保持数字类型
+            role_names = [role_data.name for role_data in roles_data]
+
+            return UserResp(
+                id=str(entity.id),  # ID转为字符串
+                username=entity.username,
+                nickname=entity.nickname,
+                gender=entity.gender,
+                avatar=entity.avatar,
+                email=entity.email,
+                phone=entity.phone,
+                status=entity.status,
+                is_system=entity.is_system,  # 使用数据库中的真实值
+                description=entity.description,
+                dept_id=entity.dept_id,  # 保持数字类型，与参考项目一致
+                dept_name=dept_name,  # 真实部门名称
+                role_ids=role_ids,  # 真实角色ID列表（数字类型）
+                role_names=role_names,  # 真实角色名称列表
+                create_user_string="超级管理员",  # TODO: 从用户表关联查询
+                create_time=entity.create_time.strftime("%Y-%m-%d %H:%M:%S") if entity.create_time else None,
+                disabled=entity.is_system,  # 系统用户禁用编辑，普通用户可编辑
+                update_user_string=None,
+                update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None
+            )
+
+        except Exception as e:
+            self.logger.error(f"转换用户响应模型失败: {e}")
+            # 失败时返回基本信息
+            return UserResp(
+                id=str(entity.id),
+                username=entity.username,
+                nickname=entity.nickname,
+                gender=entity.gender,
+                avatar=entity.avatar,
+                email=entity.email,
+                phone=entity.phone,
+                status=entity.status,
+                is_system=entity.is_system,
+                description=entity.description,
+                dept_id=entity.dept_id,
+                dept_name="未知部门",
+                role_ids=[],
+                role_names=[],
+                create_user_string="超级管理员",
+                create_time=entity.create_time.strftime("%Y-%m-%d %H:%M:%S") if entity.create_time else None,
+                disabled=entity.is_system,
+                update_user_string=None,
+                update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None
+            )
 
     def _entity_to_resp(self, entity: UserEntity) -> UserResp:
         """
@@ -295,13 +552,13 @@ class UserServiceImpl(UserService):
             update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None
         )
 
-    def _entity_to_detail_resp(self, entity: UserEntity, role_ids: list[str] = None, role_names: list[str] = None,
-                               dept_name: str = "部门名称") -> UserDetailResp:
+    def _entity_to_detail_resp(self, entity: UserEntity, role_ids: list[int] = None, role_names: list[str] = None,
+                               dept_name: str = "未知部门") -> UserDetailResp:
         """
         将用户实体转换为详情响应模型
         Args:
             entity: 用户实体
-            role_ids: 角色ID列表
+            role_ids: 角色ID列表（数字类型）
             role_names: 角色名称列表
             dept_name: 部门名称
         Returns:
@@ -318,13 +575,13 @@ class UserServiceImpl(UserService):
             status=entity.status,
             is_system=entity.is_system,
             description=entity.description,
-            dept_id=str(entity.dept_id) if entity.dept_id else None,
+            dept_id=entity.dept_id,  # 保持数字类型，与分页查询一致
             dept_name=dept_name,
             role_ids=role_ids if role_ids is not None else [],
             role_names=role_names if role_names is not None else [],
             create_user_string="超级管理员",  # TODO: 从用户表关联查询
             create_time=entity.create_time.strftime("%Y-%m-%d %H:%M:%S") if entity.create_time else None,
-            disabled=False,
+            disabled=entity.is_system,  # 与分页查询保持一致：系统用户禁用编辑
             update_user_string=None,
             update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None,
             pwd_reset_time=None  # TODO: 如果UserEntity有此字段，则从entity获取

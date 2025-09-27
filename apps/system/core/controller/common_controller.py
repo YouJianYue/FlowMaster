@@ -21,7 +21,14 @@ router = APIRouter(prefix="/system/common", tags=["系统通用"])
 async def get_data_scope_enum():
     """
     获取数据权限范围枚举
-    从 DataScopeEnum 枚举类动态获取
+    一比一复刻参考项目返回格式: LabelValueResp<Integer>
+
+    参考项目格式:
+    {
+        "label": "全部数据权限",
+        "value": 1,
+        "disabled": null
+    }
 
     Returns:
         ApiResponse[List[Dict[str, Any]]]: 数据权限范围选项
@@ -29,11 +36,12 @@ async def get_data_scope_enum():
     try:
         from apps.common.enums.data_scope_enum import DataScopeEnum
 
-        # 从枚举类动态获取所有值
+        # 一比一复刻参考项目格式：LabelValueResp<Integer>
         data_scope_options = [
             {
-                "key": str(enum_item.value_code),
-                "title": enum_item.description
+                "label": enum_item.description,
+                "value": enum_item.value_code,
+                "disabled": None  # 参考项目中包含此字段
             }
             for enum_item in DataScopeEnum
         ]

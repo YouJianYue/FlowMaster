@@ -64,40 +64,46 @@ class GlobalExceptionHandler:
 
     @staticmethod
     async def base_exception_handler(request: Request, exc: CustomBaseException) -> JSONResponse:
-        """自定义异常处理"""
+        """自定义异常处理 - 对应参考项目handleBaseException"""
         logger.error(f"[{request.method}] {request.url.path}: {exc.message}", exc_info=exc)
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
                 "success": False,
-                "code": str(status.HTTP_500_INTERNAL_SERVER_ERROR),
-                "msg": exc.message
+                "code": "500",  # 错误码在响应体中
+                "msg": exc.message,
+                "data": None,
+                "timestamp": int(__import__('time').time() * 1000)
             }
         )
 
     @staticmethod
     async def business_exception_handler(request: Request, exc: BusinessException) -> JSONResponse:
-        """业务异常处理"""
+        """业务异常处理 - 对应参考项目handleBusinessException"""
         logger.error(f"[{request.method}] {request.url.path}: {exc.message}", exc_info=exc)
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
                 "success": False,
-                "code": str(status.HTTP_500_INTERNAL_SERVER_ERROR),
-                "msg": exc.message
+                "code": "500",  # 错误码在响应体中
+                "msg": exc.message,
+                "data": None,
+                "timestamp": int(__import__('time').time() * 1000)
             }
         )
 
     @staticmethod
     async def bad_request_exception_handler(request: Request, exc: BadRequestException) -> JSONResponse:
-        """错误请求异常处理"""
+        """错误请求异常处理 - 对应参考项目handleBadRequestException"""
         logger.error(f"[{request.method}] {request.url.path}: {exc.message}", exc_info=exc)
         return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
                 "success": False,
-                "code": str(status.HTTP_400_BAD_REQUEST),
-                "msg": exc.message
+                "code": "400",  # 错误码在响应体中
+                "msg": exc.message,
+                "data": None,
+                "timestamp": int(__import__('time').time() * 1000)
             }
         )
 
@@ -123,11 +129,13 @@ class GlobalExceptionHandler:
                     error_msg = f"参数 '{field_name}': {error_msg}"
 
         return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
                 "success": False,
-                "code": str(status.HTTP_400_BAD_REQUEST),
-                "msg": error_msg
+                "code": "400",  # 错误码在响应体中
+                "msg": error_msg,
+                "data": None,
+                "timestamp": int(__import__('time').time() * 1000)
             }
         )
 
@@ -148,11 +156,13 @@ class GlobalExceptionHandler:
             message = getattr(exc, 'detail', '系统异常')
 
         return JSONResponse(
-            status_code=exc.status_code,
+            status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
                 "success": False,
-                "code": str(exc.status_code),
-                "msg": message
+                "code": str(exc.status_code),  # 错误码在响应体中
+                "msg": message,
+                "data": None,
+                "timestamp": int(__import__('time').time() * 1000)
             }
         )
 
@@ -161,11 +171,13 @@ class GlobalExceptionHandler:
         """通用异常处理"""
         logger.error(f"[{request.method}] {request.url.path}: Unexpected error", exc_info=exc)
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_200_OK,  # HTTP状态码总是200
             content={
                 "success": False,
-                "code": str(status.HTTP_500_INTERNAL_SERVER_ERROR),
-                "msg": "系统异常，请稍后重试"
+                "code": "500",  # 错误码在响应体中
+                "msg": "系统异常，请稍后重试",
+                "data": None,
+                "timestamp": int(__import__('time').time() * 1000)
             }
         )
 
