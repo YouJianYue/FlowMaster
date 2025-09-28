@@ -8,7 +8,7 @@
 """
 
 from typing import List, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from pydantic.alias_generators import to_camel
 from pydantic import ConfigDict
 from apps.common.base.model.resp.base_detail_resp import BaseDetailResponse
@@ -263,9 +263,9 @@ RolePermissionResp.model_rebuild()
 
 class RoleUserResp(BaseModel):
     """
-    角色用户响应参数
+    角色关联用户响应参数
 
-    用于显示角色关联的用户列表
+    一比一复刻参考项目 RoleUserResp.java
     """
     model_config = ConfigDict(
         from_attributes=True,
@@ -273,67 +273,113 @@ class RoleUserResp(BaseModel):
         populate_by_name=True,
         json_schema_extra={
             "example": {
-                "id": "1",
-                "userId": "1",
+                "id": 1,
+                "roleId": 1,
+                "userId": 1,
                 "username": "admin",
                 "nickname": "超级管理员",
-                "email": "admin@example.com",
-                "phone": "13888888888",
-                "deptName": "系统部门",
-                "createTime": "2023-08-14 08:54:38"
+                "gender": 1,
+                "status": 1,
+                "isSystem": True,
+                "description": "系统初始用户",
+                "deptId": 1,
+                "deptName": "Xxx科技有限公司",
+                "roleIds": [1, 2, 3, "547888897925840928"],
+                "roleNames": ["超级管理员", "系统管理员", "普通用户", "研发人员"],
+                "disabled": True
             }
         }
     )
 
-    # 用户角色关联ID
-    id: str = Field(
-        description="用户角色关联ID",
-        examples=["1"]
+    # ID - 用户角色关联ID
+    id: int = Field(
+        description="ID",
+        examples=[1]
+    )
+
+    # 角色ID
+    role_id: int = Field(
+        description="角色ID",
+        examples=[1]
     )
 
     # 用户ID
-    user_id: str = Field(
+    user_id: int = Field(
         description="用户ID",
-        examples=["1"]
+        examples=[1]
     )
 
     # 用户名
     username: str = Field(
         description="用户名",
-        examples=["admin"]
+        examples=["zhangsan"]
     )
 
     # 昵称
     nickname: Optional[str] = Field(
         None,
         description="昵称",
-        examples=["超级管理员"]
+        examples=["张三"]
     )
 
-    # 邮箱
-    email: Optional[str] = Field(
+    # 性别 (1=男, 2=女, 0=未知)
+    gender: Optional[int] = Field(
         None,
-        description="邮箱",
-        examples=["admin@example.com"]
+        description="性别",
+        examples=[1]
     )
 
-    # 手机号
-    phone: Optional[str] = Field(
+    # 状态 (1=启用, 2=禁用)
+    status: Optional[int] = Field(
         None,
-        description="手机号",
-        examples=["13888888888"]
+        description="状态",
+        examples=[1]
     )
 
-    # 部门名称
+    # 是否为系统内置数据
+    is_system: Optional[bool] = Field(
+        None,
+        description="是否为系统内置数据",
+        examples=[False]
+    )
+
+    # 描述
+    description: Optional[str] = Field(
+        None,
+        description="描述",
+        examples=["测试人员描述信息"]
+    )
+
+    # 部门ID
+    dept_id: Optional[int] = Field(
+        None,
+        description="部门ID",
+        examples=[5]
+    )
+
+    # 所属部门
     dept_name: Optional[str] = Field(
         None,
-        description="部门名称",
-        examples=["系统部门"]
+        description="所属部门",
+        examples=["测试部"]
     )
 
-    # 创建时间
-    create_time: Optional[str] = Field(
+    # 角色ID列表
+    role_ids: Optional[List[Union[int, str]]] = Field(
         None,
-        description="创建时间",
-        examples=["2023-08-14 08:54:38"]
+        description="角色ID列表",
+        examples=[[1, 2, 3]]
     )
+
+    # 角色名称列表
+    role_names: Optional[List[str]] = Field(
+        None,
+        description="角色名称列表",
+        examples=[["超级管理员", "系统管理员"]]
+    )
+
+    @computed_field
+    @property
+    def disabled(self) -> bool:
+        """是否禁用 - 对应参考项目的 getDisabled() 方法"""
+        return self.is_system or False

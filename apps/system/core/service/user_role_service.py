@@ -7,7 +7,7 @@
 """
 
 from typing import List, TYPE_CHECKING
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 
 from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.model.entity.user_role_entity import UserRoleEntity
@@ -34,6 +34,8 @@ class UserRoleService:
         """
         分页查询角色关联的用户列表
 
+        一比一复刻参考项目 UserRoleServiceImpl.pageUser()
+
         Args:
             query: 查询条件 (RoleUserQuery)
             page_query: 分页参数 (PageQuery)
@@ -44,46 +46,55 @@ class UserRoleService:
         try:
             from apps.system.core.model.resp.role_resp import RoleUserResp
             from apps.common.models.page_resp import PageResp
+            from apps.system.core.model.entity.user_entity import UserEntity
+            from apps.system.core.model.entity.dept_entity import DeptEntity
 
             async with DatabaseSession.get_session_context() as session:
-                # 构建基础查询 - 查询用户角色关联信息
+                # 构建基础查询 - 一比一复刻参考项目SQL
+                # SELECT t1.*, t2.nickname, t2.username, t2.status, t2.gender, t2.dept_id, t2.description, t2.is_system, t3.name AS deptName
+                # FROM sys_user_role AS t1
+                # LEFT JOIN sys_user AS t2 ON t2.id = t1.user_id
+                # LEFT JOIN sys_dept AS t3 ON t3.id = t2.dept_id
                 base_stmt = (
                     select(
-                        UserRoleEntity.id.label("user_role_id"),
-                        UserEntity.id.label("user_id"),
+                        UserRoleEntity.id.label("id"),
+                        UserRoleEntity.role_id.label("role_id"),
+                        UserRoleEntity.user_id.label("user_id"),
                         UserEntity.username,
                         UserEntity.nickname,
-                        UserEntity.email,
-                        UserEntity.phone,
-                        UserEntity.create_time,
+                        UserEntity.gender,
+                        UserEntity.status,
+                        UserEntity.is_system,
+                        UserEntity.description,
+                        UserEntity.dept_id,
+                        DeptEntity.name.label("dept_name"),
                     )
-                    .join(UserEntity, UserRoleEntity.user_id == UserEntity.id)
+                    .select_from(
+                        UserRoleEntity.__table__
+                        .join(UserEntity, UserRoleEntity.user_id == UserEntity.id)
+                        .outerjoin(DeptEntity, UserEntity.dept_id == DeptEntity.id)
+                    )
                     .where(UserRoleEntity.role_id == query.role_id)
                 )
 
-                # 添加过滤条件
-                if query.username:
-                    base_stmt = base_stmt.where(
-                        UserEntity.username.like(f"%{query.username}%")
+                # 添加过滤条件 - 对应参考项目的查询条件
+                if hasattr(query, 'description') and query.description:
+                    desc_filter = or_(
+                        UserEntity.username.like(f"%{query.description}%"),
+                        UserEntity.nickname.like(f"%{query.description}%"),
+                        UserEntity.description.like(f"%{query.description}%")
                     )
-                if query.nickname:
-                    base_stmt = base_stmt.where(
-                        UserEntity.nickname.like(f"%{query.nickname}%")
-                    )
-                if query.phone:
-                    base_stmt = base_stmt.where(
-                        UserEntity.phone.like(f"%{query.phone}%")
-                    )
+                    base_stmt = base_stmt.where(desc_filter)
 
                 # 统计总数
                 count_stmt = select(func.count()).select_from(base_stmt.subquery())
                 total_result = await session.execute(count_stmt)
                 total = total_result.scalar_one()
 
-                # 分页查询
+                # 分页查询 - 默认按创建时间倒序
                 offset = (page_query.page - 1) * page_query.size
                 stmt = (
-                    base_stmt.order_by(UserEntity.create_time.desc())
+                    base_stmt.order_by(UserRoleEntity.id.desc())
                     .offset(offset)
                     .limit(page_query.size)
                 )
@@ -91,20 +102,57 @@ class UserRoleService:
                 result = await session.execute(stmt)
                 users = result.all()
 
-                # 转换为响应模型
+                # 批量查询所有用户的角色信息
+                user_ids = [user.user_id for user in users]
+                user_roles_map = {}
+                
+                if user_ids:
+                    # 查询用户的所有角色
+                    roles_stmt = (
+                        select(
+                            UserRoleEntity.user_id,
+                            RoleEntity.id.label("role_id"),
+                            RoleEntity.name.label("role_name")
+                        )
+                        .select_from(
+                            UserRoleEntity.__table__
+                            .join(RoleEntity, UserRoleEntity.role_id == RoleEntity.id)
+                        )
+                        .where(UserRoleEntity.user_id.in_(user_ids))
+                        .order_by(UserRoleEntity.user_id, RoleEntity.id)
+                    )
+                    
+                    roles_result = await session.execute(roles_stmt)
+                    roles_data = roles_result.all()
+                    
+                    # 组织用户角色数据
+                    for role_data in roles_data:
+                        user_id = role_data.user_id
+                        if user_id not in user_roles_map:
+                            user_roles_map[user_id] = {"role_ids": [], "role_names": []}
+                        user_roles_map[user_id]["role_ids"].append(role_data.role_id)
+                        user_roles_map[user_id]["role_names"].append(role_data.role_name)
+
+                # 转换为响应模型 - 一比一匹配参考项目格式
                 user_list = []
                 for user in users:
+                    # 获取用户的角色信息
+                    user_role_info = user_roles_map.get(user.user_id, {"role_ids": [], "role_names": []})
+                    
                     user_resp = RoleUserResp(
-                        id=str(user.user_role_id),  # 用户角色关联ID
-                        user_id=str(user.user_id),
-                        username=user.username,
-                        nickname=user.nickname,
-                        email=user.email,
-                        phone=user.phone,
-                        dept_name="",  # TODO: 从部门表关联查询
-                        create_time=user.create_time.strftime("%Y-%m-%d %H:%M:%S")
-                        if user.create_time
-                        else None,
+                        id=user.id,                           # 用户角色关联ID
+                        role_id=user.role_id,                 # 角色ID
+                        user_id=user.user_id,                 # 用户ID
+                        username=user.username,               # 用户名
+                        nickname=user.nickname,               # 昵称
+                        gender=user.gender,                   # 性别
+                        status=user.status,                   # 状态
+                        is_system=user.is_system,             # 是否为系统内置数据
+                        description=user.description,         # 描述
+                        dept_id=user.dept_id,                 # 部门ID
+                        dept_name=user.dept_name,             # 部门名称
+                        role_ids=user_role_info["role_ids"],  # 角色ID列表
+                        role_names=user_role_info["role_names"], # 角色名称列表
                     )
                     user_list.append(user_resp)
 
