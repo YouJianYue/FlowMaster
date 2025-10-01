@@ -41,8 +41,6 @@ class MenuServiceImpl(MenuService):
             result = await session.execute(query)
             menus = result.scalars().all()
 
-            print(f"MenuServiceImpl: 查询到菜单数量: {len(menus)}")  # 调试信息
-
             # 转换为字典格式
             menu_list = []
             for menu in menus:
@@ -490,6 +488,7 @@ class MenuServiceImpl(MenuService):
     async def list_by_user_id(self, user_id: int) -> List[Dict[str, Any]]:
         """
         根据用户ID查询菜单列表
+        一比一复刻参考项目AuthServiceImpl.buildRouteTree()中的逻辑
 
         Args:
             user_id: 用户ID
@@ -497,34 +496,55 @@ class MenuServiceImpl(MenuService):
         Returns:
             List[Dict[str, Any]]: 用户有权限的菜单列表
         """
+
         async with DatabaseSession.get_session_context() as session:
             from apps.system.core.model.entity.user_role_entity import UserRoleEntity
             from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
-            
+            from apps.system.core.constant.system_constants import SystemConstants
+
             # 查询用户的所有角色ID
             user_roles_stmt = select(UserRoleEntity.role_id).where(UserRoleEntity.user_id == user_id)
             user_roles_result = await session.execute(user_roles_stmt)
             role_ids = [row[0] for row in user_roles_result.fetchall()]
-            
+
             if not role_ids:
-                # 用户没有分配任何角色，返回空列表
                 return []
-            
-            # 查询这些角色关联的所有菜单ID
-            role_menus_stmt = select(RoleMenuEntity.menu_id).where(RoleMenuEntity.role_id.in_(role_ids))
-            role_menus_result = await session.execute(role_menus_stmt)
-            menu_ids = [row[0] for row in role_menus_result.fetchall()]
-            
+
+            # 🔥 一比一复刻参考项目的超级管理员逻辑
+            # if (roleSet.stream().anyMatch(r -> SystemConstants.SUPER_ADMIN_ROLE_ID.equals(r.getId()))) {
+            #     menuSet.addAll(menuService.listByRoleId(SystemConstants.SUPER_ADMIN_ROLE_ID));
+            # } else {
+            #     roleSet.forEach(r -> menuSet.addAll(menuService.listByRoleId(r.getId())));
+            # }
+            menu_ids = set()  # 使用set去重，对应参考项目的LinkedHashSet
+
+            if SystemConstants.SUPER_ADMIN_ROLE_ID in role_ids:
+                # 🔥 关键修复：超级管理员直接获取所有启用菜单，而不查询角色菜单关联表
+                # 对应参考项目：if (SystemConstants.SUPER_ADMIN_ROLE_ID.equals(roleId)) {
+                #                  return super.list(new MenuQuery(DisEnableStatusEnum.ENABLE), null);
+                #              }
+                all_menus_stmt = select(MenuEntity.id).where(MenuEntity.status == 1)
+                all_menus_result = await session.execute(all_menus_stmt)
+                all_menu_ids = [row[0] for row in all_menus_result.fetchall()]
+                menu_ids.update(all_menu_ids)
+            else:
+                # 普通用户，获取所有角色的菜单
+                for role_id in role_ids:
+                    role_menus_stmt = select(RoleMenuEntity.menu_id).where(RoleMenuEntity.role_id == role_id)
+                    role_menus_result = await session.execute(role_menus_stmt)
+                    role_menu_ids = [row[0] for row in role_menus_result.fetchall()]
+                    menu_ids.update(role_menu_ids)
+
+
             if not menu_ids:
-                # 角色没有分配任何菜单，返回空列表
                 return []
-            
+
             # 查询这些菜单的详细信息（只查询启用的菜单）
             stmt = select(MenuEntity).where(
                 MenuEntity.id.in_(menu_ids),
                 MenuEntity.status == 1  # 只查询启用的菜单
             ).order_by(MenuEntity.sort)
-            
+
             result = await session.execute(stmt)
             menu_entities = result.scalars().all()
 
@@ -561,53 +581,24 @@ class MenuServiceImpl(MenuService):
         Returns:
             List[Dict[str, Any]]: 用户路由树
         """
-        print(f"🔍 MenuService: 开始获取用户 {user_id} 的路由树")
-        
         # 获取用户菜单
         user_menus = await self.list_by_user_id(user_id)
-        print(f"📋 用户 {user_id} 共有 {len(user_menus)} 个菜单权限")
-
-        # 调试：查看前几个菜单的详细信息
-        if user_menus:
-            print("🔍 前5个菜单的详细信息:")
-            for i, menu in enumerate(user_menus[:5]):
-                print(f"  菜单{i+1}: ID={menu.get('id')}, 标题={menu.get('title')}, "
-                      f"状态={menu.get('status')}, 类型={menu.get('type')}, "
-                      f"隐藏={menu.get('is_hidden')}")
 
         # 过滤可见菜单（排除按钮类型，只保留目录和菜单）
         visible_menus = []
-        filtered_out_count = {"status": 0, "hidden": 0, "type": 0}
-        
+
         for menu in user_menus:
-            # 详细检查每个过滤条件
+            # 检查过滤条件
             status_ok = menu.get("status") == 1
             not_hidden = not menu.get("is_hidden", False)
             type_ok = menu.get("type") in [1, 2]
-            
-            if not status_ok:
-                filtered_out_count["status"] += 1
-            if not not_hidden:
-                filtered_out_count["hidden"] += 1
-            if not type_ok:
-                filtered_out_count["type"] += 1
-            
+
             if status_ok and not_hidden and type_ok:
                 visible_menus.append(menu)
-        
-        print(f"🔍 过滤统计: 状态不符={filtered_out_count['status']}, "
-              f"隐藏菜单={filtered_out_count['hidden']}, 类型不符={filtered_out_count['type']}")
-        print(f"🔍 过滤后可见菜单: {len(visible_menus)} 个")
-        
-        if visible_menus:
-            print("🔍 可见菜单示例:")
-            for menu in visible_menus[:3]:
-                print(f"  - ID: {menu.get('id')}, 标题: {menu.get('title')}, 类型: {menu.get('type')}")
 
         # 构建树结构
         tree_result = self._build_menu_tree(visible_menus)
-        print(f"🌳 构建树结构后: {len(tree_result)} 个根节点")
-        
+
         return tree_result
 
     async def build_menu_tree_with_permissions(self, user_id: int) -> List[Dict[str, Any]]:

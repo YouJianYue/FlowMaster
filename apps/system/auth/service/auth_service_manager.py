@@ -26,36 +26,19 @@ class AuthServiceManager:
         Returns:
             AuthService: 认证服务实例
         """
-        # 🔥 添加调试日志
-        print(f"DEBUG: AuthServiceManager.get_auth_service 开始")
-
         try:
             # 使用单例模式
             if cls._auth_service is None:
-                print(f"DEBUG: 创建新的认证服务实例")
-
-                print(f"DEBUG: 准备创建 ClientService")
                 client_service = ClientService()
-                print(f"DEBUG: ClientService 创建成功")
 
-                print(f"DEBUG: 准备创建 MenuService")
                 from apps.system.core.service.menu_service import get_menu_service
                 menu_service = get_menu_service()
-                print(f"DEBUG: MenuService 创建成功")
 
-                print(f"DEBUG: 准备创建 AuthService")
                 cls._auth_service = AuthService(client_service, menu_service)
-                print(f"DEBUG: AuthService 创建成功")
-            else:
-                print(f"DEBUG: 使用已有的认证服务实例")
 
-            print(f"DEBUG: AuthServiceManager.get_auth_service 完成")
             return cls._auth_service
 
         except Exception as e:
-            print(f"DEBUG: AuthServiceManager.get_auth_service 发生异常: {type(e).__name__}: {str(e)}")
-            import traceback
-            print(f"DEBUG: AuthServiceManager 异常堆栈: {traceback.format_exc()}")
             raise  # 重新抛出异常
 
     @classmethod

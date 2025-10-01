@@ -239,7 +239,6 @@ async def test_exception():
 @app.post("/test/post", summary="测试POST请求")
 async def test_post(data: dict):
     """测试POST请求是否正常工作"""
-    print(f"DEBUG: 收到POST请求: {data}")
     return {"message": "POST请求成功", "received": data}
 
 

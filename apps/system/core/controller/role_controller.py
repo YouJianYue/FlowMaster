@@ -230,6 +230,22 @@ async def list_roles(
     return create_success_response(data=result)
 
 
+@router.get("/dict", response_model=ApiResponse[List[Dict[str, Any]]], summary="查询角色字典列表")
+async def get_role_dict(
+        query: RoleQuery = Depends(),
+        sort_query: SortQuery = Depends()
+):
+    """
+    查询角色字典列表
+
+    对应参考项目的 @CrudApi(Api.DICT) 接口
+    继承自 BaseController 的标准 dict 方法
+    无需权限验证（对应参考项目设计）
+    """
+    result = await role_controller.dict(query, sort_query)
+    return create_success_response(data=result)
+
+
 @router.get("/{role_id}", response_model=ApiResponse[RoleDetailResp], summary="查询角色详情")
 @require_permission("system:role:list")
 async def get_role(role_id: int = Path(..., description="ID", example=1)):
@@ -286,22 +302,6 @@ async def batch_delete_roles(req: IdsReq = Body(...)):
     """
     await role_controller.batch_delete(req)
     return create_success_response(data=None)
-
-
-@router.get("/dict", response_model=ApiResponse[List[Dict[str, Any]]], summary="查询角色字典列表")
-async def get_role_dict(
-        query: RoleQuery = Depends(),
-        sort_query: SortQuery = Depends()
-):
-    """
-    查询角色字典列表
-
-    对应参考项目的 @CrudApi(Api.DICT) 接口
-    继承自 BaseController 的标准 dict 方法
-    无需权限验证（对应参考项目设计）
-    """
-    result = await role_controller.dict(query, sort_query)
-    return create_success_response(data=result)
 
 
 # ==================== 角色特有接口 ====================
@@ -379,7 +379,7 @@ async def update_permission(
 
 # ==================== 用户角色管理接口 ====================
 
-@router.get("/{role_id}/user", response_model=PageResp[RoleUserResp], summary="分页查询关联用户")
+@router.get("/{role_id}/user", response_model=ApiResponse[PageResp[RoleUserResp]], summary="分页查询关联用户")
 @require_permission("system:role:list")
 async def page_user(
         role_id: int = Path(..., description="ID", example=1),
@@ -398,7 +398,7 @@ async def page_user(
     # 设置角色ID到查询条件
     query.role_id = role_id
     result = await role_controller.user_role_service.page_user(query, page_query)
-    return result
+    return create_success_response(data=result)
 
 
 @router.post("/{role_id}/user", summary="分配用户")

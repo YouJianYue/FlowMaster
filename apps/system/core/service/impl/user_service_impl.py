@@ -128,7 +128,6 @@ class UserServiceImpl(UserService):
         try:
             async with DatabaseSession.get_session_context() as session:
                 # 查询用户详情
-                print(f"🔍 用户详情查询: 请求用户ID = {user_id}")
                 query = select(UserEntity).where(UserEntity.id == int(user_id))
                 result = await session.execute(query)
                 user = result.scalar_one_or_none()
@@ -467,11 +466,11 @@ class UserServiceImpl(UserService):
                 id=str(entity.id),  # ID转为字符串
                 username=entity.username,
                 nickname=entity.nickname,
-                gender=entity.gender,
+                gender=entity.gender.value if hasattr(entity.gender, 'value') else entity.gender,  # 转换枚举为整数值
                 avatar=entity.avatar,
                 email=entity.email,
                 phone=entity.phone,
-                status=entity.status,
+                status=entity.status.value if hasattr(entity.status, 'value') else entity.status,  # 转换枚举为整数值
                 is_system=entity.is_system,  # 使用数据库中的真实值
                 description=entity.description,
                 dept_id=entity.dept_id,  # 保持数字类型，与参考项目一致
@@ -492,11 +491,11 @@ class UserServiceImpl(UserService):
                 id=str(entity.id),
                 username=entity.username,
                 nickname=entity.nickname,
-                gender=entity.gender,
+                gender=entity.gender.value if hasattr(entity.gender, 'value') else entity.gender,  # 转换枚举为整数值
                 avatar=entity.avatar,
                 email=entity.email,
                 phone=entity.phone,
-                status=entity.status,
+                status=entity.status.value if hasattr(entity.status, 'value') else entity.status,  # 转换枚举为整数值
                 is_system=entity.is_system,
                 description=entity.description,
                 dept_id=entity.dept_id,
@@ -524,11 +523,11 @@ class UserServiceImpl(UserService):
             id=str(entity.id),
             username=entity.username,
             nickname=entity.nickname,
-            gender=entity.gender,  # 数据库中直接是int类型，无需.value
+            gender=entity.gender.value if hasattr(entity.gender, 'value') else entity.gender,  # 转换枚举为整数值
             avatar=entity.avatar,
             email=entity.email,
             phone=entity.phone,
-            status=entity.status,  # 数据库中直接是int类型，无需.value
+            status=entity.status.value if hasattr(entity.status, 'value') else entity.status,  # 转换枚举为整数值
             is_system=entity.is_system,
             description=entity.description,
             dept_id=str(entity.dept_id) if entity.dept_id else None,
@@ -558,11 +557,11 @@ class UserServiceImpl(UserService):
             id=str(entity.id),
             username=entity.username,
             nickname=entity.nickname,
-            gender=entity.gender,
+            gender=entity.gender.value if hasattr(entity.gender, 'value') else entity.gender,  # 转换枚举为整数值
             avatar=entity.avatar,
             email=entity.email,
             phone=entity.phone,
-            status=entity.status,
+            status=entity.status.value if hasattr(entity.status, 'value') else entity.status,  # 转换枚举为整数值
             is_system=entity.is_system,
             description=entity.description,
             dept_id=entity.dept_id,  # 保持数字类型，与分页查询一致
@@ -574,5 +573,5 @@ class UserServiceImpl(UserService):
             disabled=entity.is_system,  # 与分页查询保持一致：系统用户禁用编辑
             update_user_string=None,
             update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None,
-            pwd_reset_time=None  # TODO: 如果UserEntity有此字段，则从entity获取
+            pwd_reset_time=entity.pwd_reset_time.strftime("%Y-%m-%d %H:%M:%S") if entity.pwd_reset_time else None
         )

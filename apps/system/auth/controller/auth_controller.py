@@ -54,18 +54,11 @@ async def login(request: LoginRequestUnion, http_request: Request, auth_service:
     Returns:
         ApiResponse[LoginResp]: 登录响应
     """
-    # 🔥 添加调试日志
-    print(f"DEBUG: 登录请求开始 - {request}")
     try:
         # 一比一复刻参考项目实现：直接调用service层，不在Controller处理业务逻辑
-        print(f"DEBUG: 准备调用 auth_service.login")
         login_resp = await auth_service.login(request, http_request)
-        print(f"DEBUG: auth_service.login 成功返回")
         return create_success_response(data=login_resp)
     except Exception as e:
-        print(f"DEBUG: 登录过程中发生异常: {type(e).__name__}: {str(e)}")
-        import traceback
-        print(f"DEBUG: 异常堆栈: {traceback.format_exc()}")
         raise  # 重新抛出异常，让全局异常处理器处理
 
 

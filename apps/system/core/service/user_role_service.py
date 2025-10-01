@@ -102,12 +102,12 @@ class UserRoleService:
                 result = await session.execute(stmt)
                 users = result.all()
 
-                # 批量查询所有用户的角色信息
+                # 批量查询当前角色信息（只返回当前角色，不是用户的所有角色）
                 user_ids = [user.user_id for user in users]
-                user_roles_map = {}
-                
+                current_role_info = {}
+
                 if user_ids:
-                    # 查询用户的所有角色
+                    # 只查询当前角色的信息 - 一比一复刻参考项目逻辑
                     roles_stmt = (
                         select(
                             UserRoleEntity.user_id,
@@ -118,27 +118,29 @@ class UserRoleService:
                             UserRoleEntity.__table__
                             .join(RoleEntity, UserRoleEntity.role_id == RoleEntity.id)
                         )
-                        .where(UserRoleEntity.user_id.in_(user_ids))
+                        .where(
+                            UserRoleEntity.user_id.in_(user_ids),
+                            UserRoleEntity.role_id == query.role_id  # 🔥 关键修复：只查询当前角色
+                        )
                         .order_by(UserRoleEntity.user_id, RoleEntity.id)
                     )
-                    
+
                     roles_result = await session.execute(roles_stmt)
                     roles_data = roles_result.all()
-                    
-                    # 组织用户角色数据
+
+                    # 组织当前角色数据（每个用户只有一个角色 - 当前查询的角色）
                     for role_data in roles_data:
-                        user_id = role_data.user_id
-                        if user_id not in user_roles_map:
-                            user_roles_map[user_id] = {"role_ids": [], "role_names": []}
-                        user_roles_map[user_id]["role_ids"].append(role_data.role_id)
-                        user_roles_map[user_id]["role_names"].append(role_data.role_name)
+                        current_role_info[role_data.user_id] = {
+                            "role_ids": [role_data.role_id],
+                            "role_names": [role_data.role_name]
+                        }
 
                 # 转换为响应模型 - 一比一匹配参考项目格式
                 user_list = []
                 for user in users:
-                    # 获取用户的角色信息
-                    user_role_info = user_roles_map.get(user.user_id, {"role_ids": [], "role_names": []})
-                    
+                    # 获取当前角色信息（只包含当前查询的角色）
+                    role_info = current_role_info.get(user.user_id, {"role_ids": [], "role_names": []})
+
                     user_resp = RoleUserResp(
                         id=user.id,                           # 用户角色关联ID
                         role_id=user.role_id,                 # 角色ID
@@ -151,8 +153,8 @@ class UserRoleService:
                         description=user.description,         # 描述
                         dept_id=user.dept_id,                 # 部门ID
                         dept_name=user.dept_name,             # 部门名称
-                        role_ids=user_role_info["role_ids"],  # 角色ID列表
-                        role_names=user_role_info["role_names"], # 角色名称列表
+                        role_ids=role_info["role_ids"],       # 🔥 修复：只包含当前角色
+                        role_names=role_info["role_names"],   # 🔥 修复：只包含当前角色
                     )
                     user_list.append(user_resp)
 

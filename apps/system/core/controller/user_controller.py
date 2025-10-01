@@ -21,7 +21,7 @@ router = APIRouter(prefix="/system", tags=["用户管理 API"])
 
 @router.get("/user", response_model=ApiResponse[PageResp[UserResp]], summary="分页查询用户列表", description="根据条件分页查询用户列表")
 async def get_user_page(
-    deptId: Optional[Union[int, str]] = Query(None, description="部门ID", example="1"),
+    deptId: Optional[int] = Query(None, description="部门ID", example=1),
     description: Optional[str] = Query(None, description="关键词（搜索用户名、昵称等）", example="Charles"),
     status: Optional[int] = Query(None, description="用户状态（1=启用，2=禁用）", example=1),
     page: int = Query(1, description="页码", ge=1, example=1),
@@ -44,7 +44,7 @@ async def get_user_page(
 
 @router.get("/user/{user_id}", response_model=ApiResponse[UserDetailResp], summary="获取用户详情", description="根据用户ID获取用户详细信息")
 async def get_user_detail(
-    user_id: Union[int, str] = Path(..., description="用户ID", example="547889293968801834"),
+    user_id: int = Path(..., description="用户ID", example=1),
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
@@ -56,7 +56,7 @@ async def get_user_detail(
 @router.put("/user/{user_id}", response_model=ApiResponse[bool], summary="修改用户", description="修改用户信息")
 async def update_user(
     update_req: UserUpdateReq,  # JSON body参数放在前面
-    user_id: Union[int, str] = Path(..., description="用户ID", example="547889293968801834"),  # Path参数放在后面
+    user_id: int = Path(..., description="用户ID", example=1),  # Path参数放在后面
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
@@ -73,7 +73,7 @@ async def update_user(
 @router.patch("/user/{user_id}/role", response_model=ApiResponse[bool], summary="分配角色", description="为用户新增或移除角色")
 async def update_user_role(
     update_req: UserRoleUpdateReq,  # JSON body参数放在前面
-    user_id: Union[int, str] = Path(..., description="用户ID", example="547889293968801834"),  # Path参数放在后面
+    user_id: int = Path(..., description="用户ID", example=1),  # Path参数放在后面
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
