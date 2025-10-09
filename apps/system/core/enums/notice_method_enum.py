@@ -8,10 +8,9 @@
 """
 
 from enum import Enum
-from typing import Dict, Any, List
 
 
-class NoticeMethodEnum(Enum):
+class NoticeMethodEnum(str, Enum):
     """
     公告通知方式枚举
 
@@ -19,40 +18,34 @@ class NoticeMethodEnum(Enum):
     """
 
     # 系统消息
-    SYSTEM_MESSAGE = (1, "系统消息")
+    SYSTEM_MESSAGE = "SYSTEM_MESSAGE"
 
     # 登录弹窗
-    POPUP = (2, "登录弹窗")
-
-    def __init__(self, value: int, description: str):
-        self.enum_value = value
-        self.description = description
+    POPUP = "POPUP"
 
     @property
-    def value(self):
-        return self.enum_value
-
-    @classmethod
-    def from_value(cls, value: int) -> 'NoticeMethodEnum':
-        """根据值获取枚举实例"""
-        for enum_item in cls:
-            if enum_item.enum_value == value:
-                return enum_item
-        raise ValueError(f"No NoticeMethodEnum with value: {value}")
-
-    @classmethod
-    def get_all_values(cls) -> List[int]:
-        """获取所有有效的值"""
-        return [item.enum_value for item in cls]
-
-    def to_dict(self) -> Dict[str, Any]:
-        """转换为字典格式"""
-        return {
-            "value": self.enum_value,
-            "description": self.description
+    def value_code(self) -> int:
+        """获取数值编码（一比一复刻 getValue()）"""
+        mapping = {
+            self.SYSTEM_MESSAGE: 1,
+            self.POPUP: 2,
         }
+        return mapping[self]
+
+    @property
+    def description(self) -> str:
+        """获取描述（一比一复刻 getDescription()）"""
+        mapping = {
+            self.SYSTEM_MESSAGE: "系统消息",
+            self.POPUP: "登录弹窗",
+        }
+        return mapping[self]
 
     @classmethod
-    def get_all_dict(cls) -> List[Dict[str, Any]]:
-        """获取所有枚举的字典格式"""
-        return [item.to_dict() for item in cls]
+    def from_value_code(cls, value_code: int) -> 'NoticeMethodEnum':
+        """根据数值编码获取枚举值"""
+        mapping = {
+            1: cls.SYSTEM_MESSAGE,
+            2: cls.POPUP,
+        }
+        return mapping.get(value_code)

@@ -353,7 +353,7 @@ async def list_permission_tree(
     return create_success_response(data=formatted_tree)
 
 
-@router.put("/{role_id}/permission", summary="修改权限")
+@router.put("/{role_id}/permission", response_model=ApiResponse[None], summary="修改权限")
 @require_permission("system:role:updatePermission")
 async def update_permission(
         role_id: int = Path(..., description="ID", example=1),
@@ -375,6 +375,7 @@ async def update_permission(
     )
     if not success:
         raise HTTPException(status_code=400, detail="修改权限失败")
+    return create_success_response(data=None)
 
 
 # ==================== 用户角色管理接口 ====================
@@ -401,7 +402,7 @@ async def page_user(
     return create_success_response(data=result)
 
 
-@router.post("/{role_id}/user", summary="分配用户")
+@router.post("/{role_id}/user", response_model=ApiResponse[None], summary="分配用户")
 @require_permission("system:role:assign")
 async def assign_to_users(
         role_id: int = Path(..., description="ID", example=1),
@@ -422,9 +423,10 @@ async def assign_to_users(
     success = await role_controller.role_service.assign_to_users(role_id, user_ids)
     if not success:
         raise HTTPException(status_code=400, detail="分配用户失败")
+    return create_success_response(data=None)
 
 
-@router.delete("/user", summary="取消分配用户")
+@router.delete("/user", response_model=ApiResponse[None], summary="取消分配用户")
 @require_permission("system:role:unassign")
 async def unassign_from_users(
         user_role_ids: List[int] = Body(..., description="用户角色关联ID列表", example=[1, 2, 3])):
@@ -443,6 +445,7 @@ async def unassign_from_users(
     success = await role_controller.user_role_service.delete_by_ids(user_role_ids)
     if not success:
         raise HTTPException(status_code=400, detail="取消分配用户失败")
+    return create_success_response(data=None)
 
 
 @router.get("/{role_id}/user/id", response_model=List[int], summary="查询关联用户ID")

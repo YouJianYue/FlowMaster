@@ -32,8 +32,7 @@ async def list_dict(code: str = Path(..., description="字典编码", example="n
     try:
         logger.info(f"开始查询字典: {code}")
 
-        # TODO: 实现字典服务调用
-        # 参考项目: return dictItemService.listByDictCode(code);
+        # 一比一复刻参考项目: return dictItemService.listByDictCode(code);
         from apps.system.core.service.dict_item_service import get_dict_item_service
 
         dict_service = get_dict_item_service()
@@ -41,7 +40,6 @@ async def list_dict(code: str = Path(..., description="字典编码", example="n
 
         logger.info(f"字典查询成功: {code}, 数据量: {len(dict_items) if dict_items else 0}")
 
-        # 使用 create_success_response 包装响应，现在有异常捕获了
         return create_success_response(data=dict_items)
 
     except Exception as e:

@@ -644,6 +644,10 @@ class RoleService:
 
                 await session.commit()
 
+                # 清除该角色的菜单缓存（一比一复刻参考项目 RoleServiceImpl.updatePermission()）
+                from apps.common.util.redis_utils import RedisUtils, CacheConstants
+                await RedisUtils.delete(CacheConstants.get_role_menu_key(role_id))
+
                 self.logger.info(f"成功更新角色 {role_id} 的权限，菜单数量: {len(menu_ids)}")
                 return True
 

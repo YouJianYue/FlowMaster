@@ -8,10 +8,9 @@
 """
 
 from enum import Enum
-from typing import Dict, Any
 
 
-class NoticeStatusEnum(Enum):
+class NoticeStatusEnum(str, Enum):
     """
     公告状态枚举
 
@@ -19,40 +18,50 @@ class NoticeStatusEnum(Enum):
     """
 
     # 草稿
-    DRAFT = (1, "草稿", "warning")
+    DRAFT = "DRAFT"
 
     # 待发布
-    PENDING = (2, "待发布", "primary")
+    PENDING = "PENDING"
 
     # 已发布
-    PUBLISHED = (3, "已发布", "success")
-
-    def __init__(self, value: int, description: str, color: str):
-        self.enum_value = value
-        self.description = description
-        self.color = color
+    PUBLISHED = "PUBLISHED"
 
     @property
-    def value(self):
-        return self.enum_value
-
-    @classmethod
-    def from_value(cls, value: int) -> 'NoticeStatusEnum':
-        """根据值获取枚举实例"""
-        for enum_item in cls:
-            if enum_item.enum_value == value:
-                return enum_item
-        raise ValueError(f"No NoticeStatusEnum with value: {value}")
-
-    def to_dict(self) -> Dict[str, Any]:
-        """转换为字典格式"""
-        return {
-            "value": self.enum_value,
-            "description": self.description,
-            "color": self.color
+    def value_code(self) -> int:
+        """获取数值编码（一比一复刻 getValue()）"""
+        mapping = {
+            self.DRAFT: 1,
+            self.PENDING: 2,
+            self.PUBLISHED: 3,
         }
+        return mapping[self]
+
+    @property
+    def description(self) -> str:
+        """获取描述（一比一复刻 getDescription()）"""
+        mapping = {
+            self.DRAFT: "草稿",
+            self.PENDING: "待发布",
+            self.PUBLISHED: "已发布",
+        }
+        return mapping[self]
+
+    @property
+    def color(self) -> str:
+        """获取颜色（一比一复刻 getColor()）"""
+        mapping = {
+            self.DRAFT: "warning",
+            self.PENDING: "primary",
+            self.PUBLISHED: "success",
+        }
+        return mapping[self]
 
     @classmethod
-    def get_all_dict(cls) -> list[Dict[str, Any]]:
-        """获取所有枚举的字典格式"""
-        return [item.to_dict() for item in cls]
+    def from_value_code(cls, value_code: int) -> 'NoticeStatusEnum':
+        """根据数值编码获取枚举值"""
+        mapping = {
+            1: cls.DRAFT,
+            2: cls.PENDING,
+            3: cls.PUBLISHED,
+        }
+        return mapping.get(value_code)

@@ -6,6 +6,7 @@
 
 from typing import Optional
 from datetime import datetime
+from pydantic import ConfigDict
 from sqlalchemy import Column, String, BigInteger, Text, Boolean, DateTime
 # 暂时移除relationship，避免循环引用问题
 from apps.common.base.model.entity.base_entity import BaseEntity
@@ -65,10 +66,9 @@ class UserEntity(BaseEntity):
 
     # 用户角色关联
     # user_roles = relationship("UserRoleEntity", back_populates="user", cascade="all, delete-orphan")
-    
-    class Config:
-        """Pydantic配置"""
-        json_schema_extra = {
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": 1,
                 "username": "admin",
@@ -87,6 +87,7 @@ class UserEntity(BaseEntity):
                 "update_time": "2025-01-18T10:00:00Z"
             }
         }
+    )
     
     def __repr__(self) -> str:
         return f"<UserEntity(id={self.id}, username='{self.username}', nickname='{self.nickname}', status='{self.status}')>"

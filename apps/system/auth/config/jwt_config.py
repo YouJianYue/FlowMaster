@@ -8,7 +8,7 @@ import os
 import warnings
 from typing import Optional
 from datetime import datetime, timedelta, UTC
-from jose import JWTError, jwt
+from jose import JWTError, jwt, ExpiredSignatureError
 # 抑制 passlib 和 bcrypt 相关警告
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", DeprecationWarning)
@@ -17,6 +17,16 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message=".*bcrypt.*", category=Warning)
     from passlib.context import CryptContext
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class TokenExpiredException(Exception):
+    """Token过期异常"""
+    pass
+
+
+class TokenInvalidException(Exception):
+    """Token无效异常"""
+    pass
 
 
 class JWTConfig(BaseSettings):
@@ -110,19 +120,32 @@ class JWTUtils:
             return None
     
     def verify_token(self, token: str, token_type: str = "access") -> Optional[dict]:
-        """验证令牌"""
-        payload = self.decode_token(token)
-        if payload is None:
-            return None
-        
+        """
+        验证令牌
+
+        Args:
+            token: JWT令牌
+            token_type: 令牌类型（access/refresh）
+
+        Returns:
+            dict: JWT payload
+
+        Raises:
+            TokenExpiredException: 令牌已过期
+            TokenInvalidException: 令牌无效
+        """
+        try:
+            payload = jwt.decode(token, self.config.secret_key, algorithms=[self.config.algorithm])
+        except ExpiredSignatureError:
+            # Token过期
+            raise TokenExpiredException("令牌已过期")
+        except JWTError as e:
+            # Token无效（格式错误、签名错误等）
+            raise TokenInvalidException(f"令牌无效: {str(e)}")
+
         # 验证令牌类型
         if payload.get("type") != token_type:
-            return None
-        
-        # 验证过期时间
-        exp = payload.get("exp")
-        if exp is None or datetime.now(UTC) > datetime.fromtimestamp(exp, UTC):
-            return None
+            raise TokenInvalidException(f"令牌类型错误，期望 {token_type}，实际 {payload.get('type')}")
 
         return payload
 

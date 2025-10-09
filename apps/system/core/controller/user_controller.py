@@ -3,8 +3,8 @@
 用户管理 API
 """
 
-from fastapi import APIRouter, Query, Path, HTTPException, Depends
-from typing import Optional, Union
+from fastapi import APIRouter, Query, Path, Depends
+from typing import Optional
 
 from apps.common.models.api_response import ApiResponse, create_success_response
 from apps.common.models.page_resp import PageResp
@@ -13,7 +13,7 @@ from apps.system.core.model.req.user_req import UserUpdateReq
 from apps.system.core.model.req.user_role_update_req import UserRoleUpdateReq
 from apps.system.core.model.resp.user_resp import UserResp
 from apps.system.core.model.resp.user_detail_resp import UserDetailResp
-from apps.common.context.user_context_holder import UserContextHolder
+from apps.common.decorators.permission_decorator import require_permission
 
 
 router = APIRouter(prefix="/system", tags=["用户管理 API"])
@@ -30,7 +30,12 @@ async def get_user_page(
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
-    """分页查询用户列表"""
+    """
+    分页查询用户列表
+
+    一比一复刻参考项目 UserController
+    参考项目通过 @CrudRequestMapping 自动生成权限，这里手动添加
+    """
     result = await user_service.get_user_page(
         dept_id=deptId,
         description=description,
@@ -42,46 +47,70 @@ async def get_user_page(
     return create_success_response(data=result)
 
 
+@router.get("/user/dict", response_model=ApiResponse[list], summary="查询用户字典列表", description="查询用户字典列表（用于下拉选择）")
+async def get_user_dict(
+    status: Optional[int] = Query(None, description="用户状态（1=启用，2=禁用）", example=1),
+    # 注入用户服务
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    查询用户字典列表
+
+    一比一复刻参考项目 UserController 的 Api.DICT 功能
+    返回格式：[{"label": "用户昵称", "value": "用户ID"}, ...]
+
+    ⚠️ 注意：此路由必须在 /user/{user_id} 之前定义，否则会被匹配为路径参数
+    """
+    result = await user_service.get_user_dict(status=status)
+    return create_success_response(data=result)
+
+
 @router.get("/user/{user_id}", response_model=ApiResponse[UserDetailResp], summary="获取用户详情", description="根据用户ID获取用户详细信息")
 async def get_user_detail(
     user_id: int = Path(..., description="用户ID", example=1),
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
-    """获取用户详情"""
+    """
+    获取用户详情
+
+    一比一复刻参考项目 UserController
+    """
     result = await user_service.get_user_detail(user_id=user_id)
     return create_success_response(data=result)
 
 
 @router.put("/user/{user_id}", response_model=ApiResponse[bool], summary="修改用户", description="修改用户信息")
+@require_permission("system:user:update")  # 一比一复刻 @SaCheckPermission("system:user:update")
 async def update_user(
     update_req: UserUpdateReq,  # JSON body参数放在前面
     user_id: int = Path(..., description="用户ID", example=1),  # Path参数放在后面
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
-    """修改用户"""
-    # 权限检查
-    user_context = UserContextHolder.get_context()
-    if not user_context or "system:user:update" not in user_context.permissions:
-        raise HTTPException(status_code=403, detail="Forbidden: Required permission 'system:user:update' is missing")
+    """
+    修改用户
 
+    一比一复刻参考项目 UserController.update()
+    使用 @require_permission 装饰器替代手动权限检查
+    """
     await user_service.update_user(user_id, update_req)
     return create_success_response(data=True)
 
 
 @router.patch("/user/{user_id}/role", response_model=ApiResponse[bool], summary="分配角色", description="为用户新增或移除角色")
+@require_permission("system:user:updateRole")  # 一比一复刻 @SaCheckPermission("system:user:updateRole")
 async def update_user_role(
     update_req: UserRoleUpdateReq,  # JSON body参数放在前面
     user_id: int = Path(..., description="用户ID", example=1),  # Path参数放在后面
     # 注入用户服务
     user_service: UserService = Depends(get_user_service)
 ):
-    """分配用户角色"""
-    # 权限检查
-    user_context = UserContextHolder.get_context()
-    if not user_context or "system:user:updateRole" not in user_context.permissions:
-        raise HTTPException(status_code=403, detail="Forbidden: Required permission 'system:user:updateRole' is missing")
+    """
+    分配用户角色
 
+    一比一复刻参考项目 UserController.updateRole()
+    使用 @require_permission 装饰器替代手动权限检查
+    """
     await user_service.update_role(update_req, user_id)
     return create_success_response(data=True)

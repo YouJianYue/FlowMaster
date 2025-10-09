@@ -20,6 +20,7 @@ load_dotenv()
 
 # 🔥 在 FastAPI 应用创建之前就初始化日志系统
 from apps.common.config.logging import setup_logging
+
 setup_logging()  # 立即初始化，接管所有后续日志
 from apps.system.auth.controller.auth_controller import router as auth_router
 from apps.common.controller import captcha_router, common_router, tenant_router
@@ -35,6 +36,8 @@ from apps.system.core.controller.common_controller import router as system_commo
 from apps.system.core.controller.user_profile_controller import router as user_profile_router
 from apps.system.core.controller.notice_controller import router as notice_router
 from apps.system.core.controller.dict_controller import router as dict_router
+from apps.system.core.controller.dict_item_controller import router as dict_item_router
+from apps.system.core.controller.option_controller import router as option_router
 
 # 导入WebSocket路由 (修复循环导入问题后重新启用)
 from apps.common.websocket.websocket_controller import (
@@ -54,11 +57,11 @@ from apps.common.config.exception.auth_exception_handler import (
 )
 
 # 导入数据库配置
-from apps.common.config.database import init_database, close_database, check_db_status
+from apps.common.config.database import close_database, check_db_status
 from apps.common.config.database.models import print_registered_models, validate_models
 
 # 导入日志配置
-from apps.common.config.logging import setup_logging, get_logger
+from apps.common.config.logging import get_logger
 
 # 导入应用配置
 from apps.common.config.app_config import app_config
@@ -66,8 +69,6 @@ from apps.common.config.app_config import app_config
 # 导入RSA配置
 from apps.common.config.rsa_properties import RsaProperties
 
-# 导入数据库初始化服务
-# from apps.common.config.database.database_init_service import DatabaseInitService
 
 # 导入uvicorn（用于直接运行）
 import uvicorn
@@ -99,27 +100,9 @@ async def lifespan(_app: FastAPI):
         print_registered_models()
         validate_models()
 
-        # 注释掉数据库初始化，因为MySQL表里已经有数据了
-        # await init_database()
-
         # 检查数据库状态
         db_status = await check_db_status()
         logger.info(f"数据库状态: {db_status}")
-
-        # 注释掉基础数据初始化，因为MySQL表里已经有数据了
-        # logger.info("初始化基础数据（使用参考项目SQL文件）...")
-        # try:
-        #     db_init_service = DatabaseInitService()
-        #     success = await db_init_service.init_database(force_reinit=False)
-        #
-        #     if success:
-        #         logger.info("基础数据初始化完成")
-        #         logger.info("权限体系数据已通过SQL文件初始化")
-        #     else:
-        #         logger.warning("基础数据初始化失败")
-        # except Exception as init_error:
-        #     logger.warning(f"基础数据初始化失败: {init_error}")
-        #     # 不阻塞应用启动，继续运行
 
         logger.info("FlowMaster 应用启动成功!")
 
@@ -171,7 +154,9 @@ app.add_middleware(
 # 注册路由 - 按照参考项目设计
 app.include_router(auth_router)  # 认证路由 /auth
 app.include_router(captcha_router)  # 验证码路由 /common
+app.include_router(dict_item_router)  # 字典项管理路由 /system/dict/item （更长的路径必须先注册）
 app.include_router(dict_router)  # 字典管理路由 /system/dict
+app.include_router(option_router)  # 系统配置参数管理路由 /system/option
 app.include_router(common_router)  # 公共路由 /system/common (包含字典查询)
 app.include_router(system_common_router)  # 系统通用路由 /system/common
 app.include_router(tenant_router)  # 租户管理路由

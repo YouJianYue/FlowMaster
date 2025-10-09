@@ -30,7 +30,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     try:
         # 延迟导入，避免循环导入
         from apps.common.websocket.websocket_manager import websocket_manager
-        from apps.system.auth.config.jwt_config import jwt_utils
+        from apps.system.auth.config.jwt_config import jwt_utils, TokenExpiredException, TokenInvalidException
 
         # 验证JWT令牌
         try:
@@ -44,6 +44,18 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 )
                 return
 
+        except TokenExpiredException:
+            logger.warning("WebSocket authentication failed: Token expired")
+            await websocket.close(
+                code=status.WS_1008_POLICY_VIOLATION, reason="Token expired"
+            )
+            return
+        except TokenInvalidException as e:
+            logger.warning(f"WebSocket authentication failed: {e}")
+            await websocket.close(
+                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
+            )
+            return
         except Exception as e:
             logger.warning(f"WebSocket authentication failed: {e}")
             await websocket.close(

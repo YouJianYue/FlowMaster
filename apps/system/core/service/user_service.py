@@ -94,6 +94,19 @@ class UserService(ABC):
         """
         pass
 
+    @abstractmethod
+    async def get_user_dict(self, status: Optional[int] = None) -> list:
+        """
+        查询用户字典列表（用于下拉选择）
+
+        Args:
+            status: 用户状态（1=启用，2=禁用，None=全部）
+
+        Returns:
+            list: 用户字典列表 [{"label": "用户昵称", "value": 用户ID}, ...]
+        """
+        pass
+
 
 # 依赖注入函数
 def get_user_service() -> UserService:

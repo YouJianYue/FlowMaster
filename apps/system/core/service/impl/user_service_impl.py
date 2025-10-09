@@ -575,3 +575,39 @@ class UserServiceImpl(UserService):
             update_time=entity.update_time.strftime("%Y-%m-%d %H:%M:%S") if entity.update_time else None,
             pwd_reset_time=entity.pwd_reset_time.strftime("%Y-%m-%d %H:%M:%S") if entity.pwd_reset_time else None
         )
+
+    async def get_user_dict(self, status: Optional[int] = None) -> list:
+        """
+        查询用户字典列表（用于下拉选择）
+        一比一复刻参考项目UserController的Api.DICT功能
+
+        Args:
+            status: 用户状态（1=启用，2=禁用，None=全部）
+
+        Returns:
+            list: 用户字典列表 [{"label": "用户昵称", "value": "用户ID"}, ...]
+        """
+        async with DatabaseSession.get_session_context() as session:
+            # 构建查询条件
+            stmt = select(UserEntity.id, UserEntity.nickname, UserEntity.username)
+
+            # 添加状态过滤条件
+            if status is not None:
+                stmt = stmt.where(UserEntity.status == status)
+
+            # 执行查询
+            result = await session.execute(stmt)
+            users = result.fetchall()
+
+            # 转换为字典格式：{"label": "昵称", "value": "ID字符串"}
+            # 前端期望value是字符串类型，参考前端代码：value: `${item.value}`
+            user_dict_list = [
+                {
+                    "label": user.nickname or user.username,
+                    "value": str(user.id)  # 转换为字符串
+                }
+                for user in users
+            ]
+
+            return user_dict_list
+

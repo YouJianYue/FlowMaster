@@ -48,25 +48,30 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             if not self._should_authenticate(request):
                 response = await call_next(request)
                 return response
-            
+
             # 提取令牌
             token = self._extract_token(request)
             if not token:
                 return self._create_unauthorized_response("缺少访问令牌")
 
             # 验证令牌
-            from apps.system.auth.config.jwt_config import jwt_utils
-            payload = jwt_utils.verify_token(token, "access")
-            if not payload:
+            from apps.system.auth.config.jwt_config import jwt_utils, TokenExpiredException, TokenInvalidException
+            try:
+                payload = jwt_utils.verify_token(token, "access")
+            except TokenExpiredException:
+                # Token过期 - 一比一复刻参考项目错误消息
+                return self._create_unauthorized_response("您的登录状态已过期，请重新登录")
+            except TokenInvalidException:
+                # Token无效
                 return self._create_unauthorized_response("无效的访问令牌")
-            
+
             # 设置用户上下文
             await self._set_user_context(payload, request)
-            
+
             # 继续处理请求
             response = await call_next(request)
             return response
-            
+
         except HTTPException as e:
             return self._create_error_response(e.status_code, e.detail)
         except Exception as e:

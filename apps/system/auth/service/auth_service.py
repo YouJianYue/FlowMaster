@@ -78,44 +78,53 @@ class AuthService:
     async def logout(self, token: str) -> bool:
         """
         用户登出
-        
+
         Args:
             token: JWT令牌
-            
+
         Returns:
             bool: 登出结果
         """
         try:
+            from apps.system.auth.config.jwt_config import TokenExpiredException, TokenInvalidException
             # 验证token并获取用户信息
             payload = jwt_utils.verify_token(token)
-            if payload:
-                # 清除用户上下文
-                UserContextHolder.clear_context()
-                # TODO: 将token加入黑名单
-                return True
-            return False
+            # 清除用户上下文
+            UserContextHolder.clear_context()
+            # TODO: 将token加入黑名单
+            return True
+        except (TokenExpiredException, TokenInvalidException):
+            # Token过期或无效，依然返回成功（登出操作是幂等的）
+            return True
         except Exception:
             return False
     
     async def refresh_token(self, request: RefreshTokenReq) -> RefreshTokenResp:
         """
         刷新访问令牌
-        
+
         Args:
             request: 刷新令牌请求
-            
+
         Returns:
             RefreshTokenResp: 刷新响应
         """
         try:
+            from apps.system.auth.config.jwt_config import TokenExpiredException, TokenInvalidException
             # 验证刷新令牌
-            payload = jwt_utils.verify_refresh_token(request.refresh_token)
-            if not payload:
+            try:
+                payload = jwt_utils.verify_token(request.refresh_token, "refresh")
+            except TokenExpiredException:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="刷新令牌无效或已过期"
+                    detail="刷新令牌已过期"
                 )
-            
+            except TokenInvalidException:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="刷新令牌无效"
+                )
+
             # 生成新的访问令牌
             user_id = payload.get("user_id")
             new_access_token = jwt_utils.create_access_token({
@@ -123,13 +132,13 @@ class AuthService:
                 "username": payload.get("username", ""),
                 "tenant_id": payload.get("tenant_id", 1)
             })
-            
+
             return RefreshTokenResp(
                 access_token=new_access_token,
                 token_type="bearer",
                 expires_in=jwt_utils.config.access_token_expire_minutes * 60
             )
-            
+
         except HTTPException:
             raise
         except Exception as e:

@@ -215,7 +215,28 @@ class MenuServiceImpl(MenuService):
         Returns:
             MenuResp: 创建的菜单数据
         """
+        from apps.common.context.user_context_holder import UserContextHolder
+        from apps.common.exceptions.business_exception import BusinessException
+        from apps.system.core.enums.menu_type_enum import MenuTypeEnum
+
         async with DatabaseSession.get_session_context() as session:
+            # 检查标题重复（一比一复刻参考项目 MenuServiceImpl.checkTitleRepeat()）
+            await self._check_title_repeat(session, menu_req.title, menu_req.parent_id, None)
+
+            # 目录和菜单的组件名称不能重复（一比一复刻参考项目 MenuServiceImpl.create()）
+            if menu_req.type != MenuTypeEnum.BUTTON:
+                await self._check_name_repeat(session, menu_req.name, None)
+
+            # 目录类型菜单，默认为 Layout（一比一复刻参考项目 MenuServiceImpl.create()）
+            component = menu_req.component
+            if menu_req.type == MenuTypeEnum.DIR:
+                component = component if component else "Layout"
+
+            # 获取当前用户ID
+            current_user_id = UserContextHolder.get_user_id()
+            if not current_user_id:
+                current_user_id = 1  # 如果未登录，默认为系统管理员
+
             # 创建菜单实体
             menu_entity = MenuEntity(
                 title=menu_req.title,
@@ -223,7 +244,7 @@ class MenuServiceImpl(MenuService):
                 type=menu_req.type,
                 path=menu_req.path,
                 name=menu_req.name,
-                component=menu_req.component,
+                component=component,
                 redirect=menu_req.redirect,
                 icon=menu_req.icon,
                 is_external=menu_req.is_external
@@ -236,7 +257,7 @@ class MenuServiceImpl(MenuService):
                 permission=menu_req.permission,
                 sort=menu_req.sort,
                 status=menu_req.status,
-                create_user=1,  # TODO: 从上下文获取
+                create_user=current_user_id,
                 create_time=datetime.now(),
             )
 
@@ -244,6 +265,9 @@ class MenuServiceImpl(MenuService):
             session.add(menu_entity)
             await session.commit()
             await session.refresh(menu_entity)
+
+            # 清除角色菜单缓存（一比一复刻参考项目 MenuServiceImpl.create()）
+            await self.clear_cache()
 
             # 转换为响应模型
             return self._entity_to_resp(menu_entity)
@@ -259,11 +283,31 @@ class MenuServiceImpl(MenuService):
         Returns:
             MenuResp: 更新的菜单数据
         """
+        from apps.common.context.user_context_holder import UserContextHolder
+        from apps.common.exceptions.business_exception import BusinessException
+        from apps.system.core.enums.menu_type_enum import MenuTypeEnum
+
         async with DatabaseSession.get_session_context() as session:
             # 查询现有菜单
             menu_entity = await session.get(MenuEntity, menu_id)
             if not menu_entity:
-                raise ValueError(f"菜单不存在: {menu_id}")
+                raise BusinessException(f"菜单不存在: {menu_id}")
+
+            # 检查标题重复（一比一复刻参考项目 MenuServiceImpl.checkTitleRepeat()）
+            await self._check_title_repeat(session, menu_req.title, menu_req.parent_id, menu_id)
+
+            # 目录和菜单的组件名称不能重复（一比一复刻参考项目 MenuServiceImpl.update()）
+            if menu_req.type != MenuTypeEnum.BUTTON:
+                await self._check_name_repeat(session, menu_req.name, menu_id)
+
+            # 不允许修改菜单类型（一比一复刻参考项目 MenuServiceImpl.update()）
+            if menu_req.type != menu_entity.type:
+                raise BusinessException("不允许修改菜单类型")
+
+            # 获取当前用户ID
+            current_user_id = UserContextHolder.get_user_id()
+            if not current_user_id:
+                current_user_id = 1  # 如果未登录，默认为系统管理员
 
             # 更新字段
             menu_entity.title = menu_req.title
@@ -286,12 +330,15 @@ class MenuServiceImpl(MenuService):
             menu_entity.permission = menu_req.permission
             menu_entity.sort = menu_req.sort
             menu_entity.status = menu_req.status
-            menu_entity.update_user = 1  # TODO: 从上下文获取
+            menu_entity.update_user = current_user_id
             menu_entity.update_time = datetime.now()
 
             # 保存更改
             await session.commit()
             await session.refresh(menu_entity)
+
+            # 清除角色菜单缓存（一比一复刻参考项目 MenuServiceImpl.update()）
+            await self.clear_cache()
 
             # 转换为响应模型
             return self._entity_to_resp(menu_entity)
@@ -342,6 +389,9 @@ class MenuServiceImpl(MenuService):
             await session.execute(delete_query)
             await session.commit()
 
+            # 清除角色菜单缓存（一比一复刻参考项目 MenuServiceImpl.delete()）
+            await self.clear_cache()
+
     async def get_menu_dict_tree(self) -> List[Dict[str, Any]]:
         """
         获取菜单字典树（用于下拉选择）
@@ -358,10 +408,20 @@ class MenuServiceImpl(MenuService):
     async def clear_cache(self) -> None:
         """
         清除缓存（一比一复刻参考项目）
+
+        一比一复刻参考项目 MenuController.clearCache():
+        RedisUtils.deleteByPattern(CacheConstants.ROLE_MENU_KEY_PREFIX + StringConstants.ASTERISK);
         """
-        # TODO: 实现Redis缓存清除逻辑
-        # 目前暂时跳过，因为还没有Redis缓存
-        pass
+        from apps.common.util.redis_utils import RedisUtils, CacheConstants
+
+        try:
+            # 删除所有角色菜单缓存 ROLE_MENU:*
+            deleted_count = await RedisUtils.delete_by_pattern(f"{CacheConstants.ROLE_MENU_KEY_PREFIX}*")
+            logger.info(f"清除菜单缓存成功，共删除 {deleted_count} 个缓存键")
+        except Exception as e:
+            logger.error(f"清除菜单缓存失败: {e}", exc_info=True)
+            # 不抛出异常，避免影响主流程
+            pass
 
     def _entity_to_resp(self, entity: MenuEntity) -> 'MenuResp':
         """
@@ -519,10 +579,6 @@ class MenuServiceImpl(MenuService):
             menu_ids = set()  # 使用set去重，对应参考项目的LinkedHashSet
 
             if SystemConstants.SUPER_ADMIN_ROLE_ID in role_ids:
-                # 🔥 关键修复：超级管理员直接获取所有启用菜单，而不查询角色菜单关联表
-                # 对应参考项目：if (SystemConstants.SUPER_ADMIN_ROLE_ID.equals(roleId)) {
-                #                  return super.list(new MenuQuery(DisEnableStatusEnum.ENABLE), null);
-                #              }
                 all_menus_stmt = select(MenuEntity.id).where(MenuEntity.status == 1)
                 all_menus_result = await session.execute(all_menus_stmt)
                 all_menu_ids = [row[0] for row in all_menus_result.fetchall()]
@@ -584,16 +640,19 @@ class MenuServiceImpl(MenuService):
         # 获取用户菜单
         user_menus = await self.list_by_user_id(user_id)
 
-        # 过滤可见菜单（排除按钮类型，只保留目录和菜单）
+        # 过滤菜单（排除按钮类型，只保留目录和菜单）
+        # 🔥 一比一复刻参考项目AuthServiceImpl.buildRouteTree():
+        # List<MenuResp> menuList = menuSet.stream().filter(m -> !MenuTypeEnum.BUTTON.equals(m.getType())).toList();
+        # 参考项目只过滤按钮类型（type=3），不过滤隐藏菜单（is_hidden=1）
+        # 隐藏菜单仍需要在路由树中，否则前端无法访问如/system/notice/add等隐藏的子页面
         visible_menus = []
 
         for menu in user_menus:
-            # 检查过滤条件
+            # 检查过滤条件：只过滤启用状态和非按钮类型
             status_ok = menu.get("status") == 1
-            not_hidden = not menu.get("is_hidden", False)
-            type_ok = menu.get("type") in [1, 2]
+            type_ok = menu.get("type") in [1, 2]  # 只保留目录(1)和菜单(2)，过滤按钮(3)
 
-            if status_ok and not_hidden and type_ok:
+            if status_ok and type_ok:
                 visible_menus.append(menu)
 
         # 构建树结构
@@ -757,6 +816,71 @@ class MenuServiceImpl(MenuService):
             return result
 
         return build_tree(all_menus)
+
+    async def _check_title_repeat(self, session, title: str, parent_id: int, menu_id: int = None) -> None:
+        """
+        检查标题是否重复（一比一复刻参考项目 MenuServiceImpl.checkTitleRepeat()）
+
+        Args:
+            session: 数据库会话
+            title: 标题
+            parent_id: 上级ID
+            menu_id: 菜单ID（更新时传入，创建时为None）
+
+        Raises:
+            BusinessException: 标题重复时抛出
+        """
+        from apps.common.exceptions.business_exception import BusinessException
+
+        # 构建查询条件：同一父菜单下，标题相同的菜单
+        query = select(func.count(MenuEntity.id)).where(
+            MenuEntity.title == title,
+            MenuEntity.parent_id == (parent_id if parent_id else 0)
+        )
+
+        # 如果是更新操作，排除自身
+        if menu_id is not None:
+            query = query.where(MenuEntity.id != menu_id)
+
+        result = await session.execute(query)
+        count = result.scalar_one()
+
+        if count > 0:
+            raise BusinessException(f"标题为 [{title}] 的菜单已存在")
+
+    async def _check_name_repeat(self, session, name: str, menu_id: int = None) -> None:
+        """
+        检查组件名称是否重复（一比一复刻参考项目 MenuServiceImpl.checkNameRepeat()）
+
+        Args:
+            session: 数据库会话
+            name: 组件名称
+            menu_id: 菜单ID（更新时传入，创建时为None）
+
+        Raises:
+            BusinessException: 组件名称重复时抛出
+        """
+        from apps.common.exceptions.business_exception import BusinessException
+        from apps.system.core.enums.menu_type_enum import MenuTypeEnum
+
+        if not name:
+            return
+
+        # 构建查询条件：组件名称相同，且不是按钮类型
+        query = select(func.count(MenuEntity.id)).where(
+            MenuEntity.name == name,
+            MenuEntity.type != MenuTypeEnum.BUTTON
+        )
+
+        # 如果是更新操作，排除自身
+        if menu_id is not None:
+            query = query.where(MenuEntity.id != menu_id)
+
+        result = await session.execute(query)
+        count = result.scalar_one()
+
+        if count > 0:
+            raise BusinessException(f"组件名称为 [{name}] 的菜单已存在")
 
 
 # 全局服务实例

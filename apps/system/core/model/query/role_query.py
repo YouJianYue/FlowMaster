@@ -80,9 +80,7 @@ class RoleUserQuery(BaseModel):
         json_schema_extra={
             "example": {
                 "roleId": 1,
-                "username": "admin",
-                "nickname": "管理员",
-                "phone": "13888888888"
+                "description": "zhangsan"
             }
         }
     )
@@ -94,25 +92,11 @@ class RoleUserQuery(BaseModel):
         examples=[1]
     )
 
-    # 用户名
-    username: Optional[str] = Field(
+    # 关键词（搜索用户名、昵称、描述等）
+    description: Optional[str] = Field(
         None,
-        description="用户名",
-        examples=["admin"]
-    )
-
-    # 昵称
-    nickname: Optional[str] = Field(
-        None,
-        description="昵称",
-        examples=["管理员"]
-    )
-
-    # 手机号
-    phone: Optional[str] = Field(
-        None,
-        description="手机号",
-        examples=["13888888888"]
+        description="关键词",
+        examples=["zhangsan"]
     )
 
     def get_filters(self) -> dict:

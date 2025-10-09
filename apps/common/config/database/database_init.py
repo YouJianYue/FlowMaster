@@ -97,11 +97,11 @@ class DatabaseInitializer:
     
     @staticmethod
     async def check_database_status():
-        """检查数据库状态"""
+        """检查数据库状态（隐藏密码）"""
         try:
             # 检查连接
             connection_ok = await DatabaseSession.check_database_connection()
-            
+
             # 检查表是否存在
             engine, _ = initialize_database_engine()
             async with engine.begin() as conn:
@@ -114,20 +114,40 @@ class DatabaseInitializer:
                     result = await conn.execute(text("SHOW TABLES"))
                 else:
                     result = None
-                
+
                 tables = [row[0] for row in result] if result else []
-            
+
+            # 隐藏密码的数据库URL
+            safe_url = database_config.url
+            if '@' in safe_url:
+                # 格式: mysql+asyncmy://user:password@host:port/db
+                # 转换为: mysql+asyncmy://user:***@host:port/db
+                parts = safe_url.split('@')
+                protocol_and_auth = parts[0]  # mysql+asyncmy://user:password
+                host_and_rest = parts[1]      # host:port/db
+
+                # 提取用户名部分
+                if '://' in protocol_and_auth:
+                    protocol = protocol_and_auth.split('://')[0]
+                    auth_part = protocol_and_auth.split('://')[1]
+
+                    if ':' in auth_part:
+                        username = auth_part.split(':')[0]
+                        safe_url = f"{protocol}://{username}:***@{host_and_rest}"
+                    else:
+                        safe_url = f"{protocol}://***@{host_and_rest}"
+
             status = {
                 "connection": connection_ok,
                 "database_type": database_config.get_database_type(),
-                "database_url": database_config.url,
+                "database_url": safe_url,
                 "tables_count": len(tables),
                 "tables": tables
             }
-            
-            logger.info(f"Database status: {status}")
+
+            logger.info(f"Database status: connection={connection_ok}, type={database_config.get_database_type()}, tables={len(tables)}")
             return status
-            
+
         except Exception as e:
             logger.error(f"Failed to check database status: {e}")
             return {
