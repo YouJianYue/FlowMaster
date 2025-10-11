@@ -53,13 +53,14 @@ async def get_site_dict_options():
     获取网站配置字典选项
 
     返回网站相关的配置选项，如网站标题、描述、版权信息等
-    一比一复刻参考项目 OptionService.list() 查询数据库
+    一比一复刻参考项目 OptionService.getByCategory() 查询数据库
     """
     try:
         from apps.system.core.service.option_service import get_option_service
+        from apps.system.core.enums.option_category_enum import OptionCategoryEnum
 
         option_service = get_option_service()
-        site_options = await option_service.list_by_category("SITE")
+        site_options = await option_service.get_by_category(OptionCategoryEnum.SITE)
 
         return JSONResponse(
             content={"success": True, "code": "0", "msg": "ok", "data": site_options}

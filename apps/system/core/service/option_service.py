@@ -8,11 +8,12 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Dict
 from apps.system.core.model.query.option_query import OptionQuery
 from apps.system.core.model.req.option_req import OptionReq
 from apps.system.core.model.req.option_value_reset_req import OptionValueResetReq
 from apps.system.core.model.resp.option_resp import OptionResp
+from apps.system.core.enums.option_category_enum import OptionCategoryEnum
 
 
 class OptionService(ABC):
@@ -31,6 +32,20 @@ class OptionService(ABC):
 
         Returns:
             List[OptionResp]: 参数列表
+        """
+        pass
+
+    @abstractmethod
+    async def get_by_category(self, category: OptionCategoryEnum) -> Dict[str, str]:
+        """
+        根据类别查询参数
+        一比一复刻参考项目 OptionService.getByCategory()
+
+        Args:
+            category: 类别枚举
+
+        Returns:
+            Dict[str, str]: code -> value 的映射
         """
         pass
 

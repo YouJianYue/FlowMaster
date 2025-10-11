@@ -7,7 +7,7 @@
 @since: 2025/10/05
 """
 
-from typing import List
+from typing import List, Dict
 from sqlalchemy import select, update
 from apps.system.core.service.option_service import OptionService
 from apps.system.core.model.query.option_query import OptionQuery
@@ -15,6 +15,7 @@ from apps.system.core.model.req.option_req import OptionReq
 from apps.system.core.model.req.option_value_reset_req import OptionValueResetReq
 from apps.system.core.model.resp.option_resp import OptionResp
 from apps.system.core.model.entity.option_entity import OptionEntity
+from apps.system.core.enums.option_category_enum import OptionCategoryEnum
 from apps.common.config.database.database_session import DatabaseSession
 from apps.common.config.logging import get_logger
 from apps.common.config.exception.global_exception_handler import BusinessException
@@ -68,6 +69,38 @@ class OptionServiceImpl(OptionService):
         except Exception as e:
             logger.error(f"查询参数列表失败: {e}", exc_info=True)
             raise BusinessException(f"查询参数列表失败: {str(e)}")
+
+    async def get_by_category(self, category: OptionCategoryEnum) -> Dict[str, str]:
+        """
+        根据类别查询参数
+        一比一复刻参考项目 OptionServiceImpl.getByCategory()
+
+        返回 code -> value 的映射，如果value为空则使用defaultValue
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 查询指定类别的所有参数
+                stmt = select(OptionEntity).where(
+                    OptionEntity.category == category.value
+                ).order_by(OptionEntity.id.asc())
+
+                result = await session.execute(stmt)
+                entities = result.scalars().all()
+
+                # 转换为 code -> value 的字典
+                # 一比一复刻参考项目: StrUtil.emptyIfNull(ObjectUtil.defaultIfNull(o.getValue(), o.getDefaultValue()))
+                option_map = {}
+                for entity in entities:
+                    # 如果 value 不为空则使用 value，否则使用 default_value
+                    value = entity.value if entity.value is not None else entity.default_value
+                    # 如果还是 None，则使用空字符串
+                    option_map[entity.code] = value if value is not None else ""
+
+                return option_map
+
+        except Exception as e:
+            logger.error(f"根据类别查询参数失败 [{category.value}]: {e}", exc_info=True)
+            raise BusinessException(f"根据类别查询参数失败: {str(e)}")
 
     async def update(self, options: List[OptionReq]) -> None:
         """
