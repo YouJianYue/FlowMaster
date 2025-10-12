@@ -9,10 +9,10 @@
 
 from pydantic import Field, ConfigDict
 from typing import Optional
-from apps.common.base.model.resp.base_detail_resp import BaseDetailResponse
+from apps.common.base.model.resp.base_detail_resp import BaseDetailResp
 
 
-class DictItemResp(BaseDetailResponse):
+class DictItemResp(BaseDetailResp):
     """
     字典项响应参数
     一比一复刻参考项目 DictItemResp.java (extends BaseDetailResp)

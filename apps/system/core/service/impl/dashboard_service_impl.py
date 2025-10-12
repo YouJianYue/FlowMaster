@@ -23,9 +23,12 @@ class DashboardServiceImpl(DashboardService):
         """
         查询公告列表
 
+        一比一复刻参考项目 DashboardServiceImpl.listNotice()
+
         Returns:
             List[DashboardNoticeResp]: 公告列表
         """
-        # TODO: 实现实际的数据库查询逻辑
-        # 暂时返回空列表，避免频繁访问
-        return []
+        from apps.common.context.user_context_holder import UserContextHolder
+
+        user_id = UserContextHolder.get_user_id()
+        return await self.notice_service.list_dashboard(user_id)

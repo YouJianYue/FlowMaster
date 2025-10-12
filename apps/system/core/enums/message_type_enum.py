@@ -11,13 +11,18 @@ from enum import IntEnum
 
 class MessageTypeEnum(IntEnum):
     """消息类型枚举"""
-    
+
     # 系统消息
     SYSTEM = 1
     # 安全消息
     SECURITY = 2
-    
-    @property 
+
+    @property
+    def value_code(self) -> int:
+        """获取数值编码（用于BaseEnum识别）"""
+        return self.value
+
+    @property
     def description(self):
         """获取描述"""
         descriptions = {

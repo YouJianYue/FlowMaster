@@ -10,8 +10,8 @@
 import json
 from typing import Optional, List
 from datetime import datetime
-from sqlalchemy import select, func, or_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func, or_, and_, case
+from sqlalchemy.orm import selectinload, aliased
 
 from apps.system.core.service.notice_service import NoticeService
 from apps.system.core.enums.notice_method_enum import NoticeMethodEnum
@@ -21,6 +21,7 @@ from apps.system.core.model.entity.notice_entity import NoticeEntity
 from apps.system.core.model.query.notice_query import NoticeQuery
 from apps.system.core.model.req.notice_req import NoticeReq
 from apps.system.core.model.resp.notice_resp import NoticeResp, NoticeDetailResp
+from apps.system.core.model.resp.dashboard_notice_resp import DashboardNoticeResp
 from apps.common.config.database.database_session import DatabaseSession
 from apps.common.config.logging import get_logger
 from apps.common.config.exception.global_exception_handler import BusinessException
@@ -40,21 +41,50 @@ class NoticeServiceImpl(NoticeService):
         分页查询公告列表
         一比一复刻参考项目 NoticeServiceImpl.page()
         """
+        from apps.system.core.model.entity.notice_log_entity import NoticeLogEntity
+
         try:
             async with DatabaseSession.get_session_context() as session:
-                # 构建查询
-                stmt = select(NoticeEntity)
+                # 获取当前用户ID（用于查询已读状态）
+                user_id = getattr(query, 'user_id', None)
+
+                # 创建别名
+                t1 = NoticeEntity
+                t2 = aliased(NoticeLogEntity)
+
+                # 构建查询 - 如果有user_id，添加LEFT JOIN查询阅读状态
+                if user_id:
+                    # SELECT t1.*, (t2.read_time IS NOT NULL) AS is_read
+                    is_read_expr = case(
+                        (t2.read_time.isnot(None), True),
+                        else_=False
+                    ).label('is_read')
+
+                    stmt = select(t1, is_read_expr).outerjoin(
+                        t2,
+                        and_(
+                            t2.notice_id == t1.id,
+                            t2.user_id == user_id
+                        )
+                    )
+                else:
+                    stmt = select(t1)
 
                 # 标题模糊查询
                 if query.title:
-                    stmt = stmt.where(NoticeEntity.title.like(f'%{query.title}%'))
+                    stmt = stmt.where(t1.title.like(f'%{query.title}%'))
 
                 # 分类查询
                 if query.type:
-                    stmt = stmt.where(NoticeEntity.type == query.type)
+                    stmt = stmt.where(t1.type == query.type)
 
-                # 按ID倒序
-                stmt = stmt.order_by(NoticeEntity.id.desc())
+                # 排序
+                if user_id:
+                    # 用户视角：按置顶、发布时间倒序
+                    stmt = stmt.order_by(t1.is_top.desc(), t1.publish_time.desc())
+                else:
+                    # 管理视角：按创建时间倒序
+                    stmt = stmt.order_by(t1.id.desc())
 
                 # 计算总数
                 count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -64,30 +94,52 @@ class NoticeServiceImpl(NoticeService):
                 # 分页
                 stmt = stmt.offset((page - 1) * size).limit(size)
                 result = await session.execute(stmt)
-                entities = result.scalars().all()
 
                 # 转换为响应对象
                 notice_list = []
-                for entity in entities:
-                    notice_resp = NoticeResp(
-                        id=str(entity.id),
-                        title=entity.title,
-                        type=entity.type,
-                        notice_scope=NoticeScopeEnum(entity.notice_scope),
-                        notice_methods=json.loads(entity.notice_methods) if entity.notice_methods else None,
-                        is_timing=entity.is_timing,
-                        publish_time=entity.publish_time,
-                        is_top=entity.is_top,
-                        status=NoticeStatusEnum(entity.status),
-                        create_time=entity.create_time,
-                        update_time=entity.update_time,
-                        create_user=entity.create_user,
-                        update_user=entity.update_user,
-                        create_user_string=None,  # TODO: 关联查询创建人姓名
-                        update_user_string=None,  # TODO: 关联查询更新人姓名
-                        is_read=False  # TODO: 查询用户阅读状态
-                    )
-                    notice_list.append(notice_resp)
+                if user_id:
+                    # 包含is_read字段
+                    for row in result:
+                        entity = row[0]  # NoticeEntity
+                        is_read = row[1]  # is_read
+                        notice_resp = NoticeResp(
+                            id=entity.id,
+                            title=entity.title,
+                            type=entity.type,
+                            notice_scope=NoticeScopeEnum(entity.notice_scope),
+                            notice_methods=json.loads(entity.notice_methods) if entity.notice_methods else None,
+                            is_timing=entity.is_timing,
+                            publish_time=entity.publish_time,
+                            is_top=entity.is_top,
+                            status=NoticeStatusEnum(entity.status),
+                            create_time=entity.create_time,
+                            update_time=entity.update_time,
+                            create_user_string=None,  # TODO: 关联查询创建人姓名
+                            update_user_string=None,  # TODO: 关联查询更新人姓名
+                            is_read=is_read
+                        )
+                        notice_list.append(notice_resp)
+                else:
+                    # 不包含is_read字段
+                    entities = result.scalars().all()
+                    for entity in entities:
+                        notice_resp = NoticeResp(
+                            id=entity.id,
+                            title=entity.title,
+                            type=entity.type,
+                            notice_scope=NoticeScopeEnum(entity.notice_scope),
+                            notice_methods=json.loads(entity.notice_methods) if entity.notice_methods else None,
+                            is_timing=entity.is_timing,
+                            publish_time=entity.publish_time,
+                            is_top=entity.is_top,
+                            status=NoticeStatusEnum(entity.status),
+                            create_time=entity.create_time,
+                            update_time=entity.update_time,
+                            create_user_string=None,  # TODO: 关联查询创建人姓名
+                            update_user_string=None,  # TODO: 关联查询更新人姓名
+                            is_read=False
+                        )
+                        notice_list.append(notice_resp)
 
                 return {
                     "list": notice_list,
@@ -130,7 +182,7 @@ class NoticeServiceImpl(NoticeService):
 
                 # 转换为详情响应对象
                 return NoticeDetailResp(
-                    id=str(entity.id),
+                    id=entity.id,
                     title=entity.title,
                     type=entity.type,
                     content=entity.content,
@@ -143,8 +195,6 @@ class NoticeServiceImpl(NoticeService):
                     status=NoticeStatusEnum(entity.status),
                     create_time=entity.create_time,
                     update_time=entity.update_time,
-                    create_user=entity.create_user,
-                    update_user=entity.update_user,
                     create_user_string=None,  # TODO: 关联查询创建人姓名
                     update_user_string=None  # TODO: 关联查询更新人姓名
                 )
@@ -288,6 +338,8 @@ class NoticeServiceImpl(NoticeService):
         批量删除公告
         一比一复刻参考项目 NoticeServiceImpl.delete()
         """
+        from apps.system.core.service.impl.notice_log_service_impl import NoticeLogServiceImpl
+
         try:
             async with DatabaseSession.get_session_context() as session:
                 # 删除公告
@@ -302,8 +354,9 @@ class NoticeServiceImpl(NoticeService):
 
                 logger.info(f"批量删除公告成功: ids={ids}, 数量={len(entities)}")
 
-                # TODO: 删除公告日志
-                # await noticeLogService.deleteByNoticeIds(ids)
+                # 删除公告日志
+                notice_log_service = NoticeLogServiceImpl()
+                await notice_log_service.delete_by_notice_ids(ids)
 
         except Exception as e:
             logger.error(f"批量删除公告失败: {e}", exc_info=True)
@@ -339,13 +392,134 @@ class NoticeServiceImpl(NoticeService):
         """
         查询用户未读通知ID列表
         一比一复刻参考项目 NoticeServiceImpl.listUnreadIdsByUserId()
+        SQL: selectUnreadIdsByUserId
         """
+        from apps.system.core.model.entity.notice_log_entity import NoticeLogEntity
+
         try:
             async with DatabaseSession.get_session_context() as session:
-                # TODO: 实现实际的数据库查询逻辑，关联notice_log表
-                # 暂时返回空列表
-                return []
+                # 创建别名
+                t1 = aliased(NoticeEntity)
+                t2 = aliased(NoticeLogEntity)
+
+                # 基础查询
+                query = select(t1.id).outerjoin(
+                    t2,
+                    and_(
+                        t2.notice_id == t1.id,
+                        t2.user_id == user_id
+                    )
+                )
+
+                # 通知范围过滤：所有人 OR (指定用户 AND 用户在列表中)
+                query = query.where(
+                    or_(
+                        t1.notice_scope == NoticeScopeEnum.ALL.value,
+                        and_(
+                            t1.notice_scope == NoticeScopeEnum.USER.value,
+                            func.json_contains(t1.notice_users, func.concat('"', str(user_id), '"'))
+                        )
+                    )
+                )
+
+                # 如果指定了通知方式，添加方式过滤
+                if method is not None:
+                    query = query.where(
+                        func.json_contains(t1.notice_methods, str(method.value))
+                    )
+
+                # 只返回未读的（read_time IS NULL）
+                query = query.where(t2.read_time.is_(None))
+
+                # 执行查询
+                result = await session.execute(query)
+                rows = result.all()
+
+                return [row.id for row in rows]
 
         except Exception as e:
             logger.error(f"查询用户未读通知ID列表失败: {e}", exc_info=True)
             return []
+
+    async def list_dashboard(self, user_id: Optional[int] = None) -> List[DashboardNoticeResp]:
+        """
+        查询仪表盘公告列表
+
+        一比一复刻参考项目 NoticeServiceImpl.listDashboard()
+        SQL: selectDashboardList
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            List[DashboardNoticeResp]: 公告列表（最多5条）
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 基础查询：状态为已发布
+                query = select(
+                    NoticeEntity.id,
+                    NoticeEntity.title,
+                    NoticeEntity.type,
+                    NoticeEntity.is_top
+                ).where(
+                    NoticeEntity.status == NoticeStatusEnum.PUBLISHED.value
+                )
+
+                # 如果有用户ID，添加通知范围过滤
+                if user_id is not None:
+                    query = query.where(
+                        or_(
+                            NoticeEntity.notice_scope == NoticeScopeEnum.ALL.value,
+                            and_(
+                                NoticeEntity.notice_scope == NoticeScopeEnum.USER.value,
+                                func.json_contains(NoticeEntity.notice_users, func.concat('"', str(user_id), '"'))
+                            )
+                        )
+                    )
+
+                # 排序和限制
+                query = query.order_by(
+                    NoticeEntity.is_top.desc(),
+                    NoticeEntity.publish_time.desc()
+                ).limit(5)
+
+                result = await session.execute(query)
+                rows = result.all()
+
+                return [
+                    DashboardNoticeResp(
+                        id=row.id,
+                        title=row.title,
+                        type=row.type,
+                        is_top=row.is_top
+                    )
+                    for row in rows
+                ]
+
+        except Exception as e:
+            logger.error(f"查询仪表盘公告列表失败: {e}", exc_info=True)
+            return []
+
+    async def read_notice(self, notice_id: int, user_id: int) -> None:
+        """
+        标记公告为已读
+
+        一比一复刻参考项目 NoticeServiceImpl.readNotice()
+        调用 NoticeLogService.add() 添加阅读记录
+
+        Args:
+            notice_id: 公告ID
+            user_id: 用户ID
+        """
+        from apps.system.core.service.impl.notice_log_service_impl import NoticeLogServiceImpl
+
+        try:
+            notice_log_service = NoticeLogServiceImpl()
+            await notice_log_service.add([user_id], notice_id)
+            logger.info(f"标记公告为已读: notice_id={notice_id}, user_id={user_id}")
+
+        except Exception as e:
+            logger.error(f"标记公告为已读失败: {e}", exc_info=True)
+            # 不抛出异常，避免影响获取公告详情
+

@@ -222,12 +222,17 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     def _create_error_response(self, status_code: int, detail: str) -> JSONResponse:
         """
         创建错误响应
+
+        一比一复刻参考项目 GlobalSaTokenExceptionHandler
+        返回 HTTP 200，错误码在响应体的 code 字段中
         """
         return JSONResponse(
-            status_code=status_code,
+            status_code=200,  # ✅ 一比一复刻参考项目：总是返回 HTTP 200
             content={
                 "success": False,
-                "code": str(status_code),
-                "msg": detail
+                "code": str(status_code),  # ✅ 错误码在响应体中
+                "msg": detail,
+                "data": None,
+                "timestamp": int(__import__('time').time() * 1000)
             }
         )

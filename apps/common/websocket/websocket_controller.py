@@ -67,14 +67,19 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
         await websocket_manager.connect(websocket, token, user_id)
 
         try:
-            # 发送连接成功消息
-            welcome_message = {
-                "type": "connection",
-                "status": "connected",
-                "message": f"Welcome {username}!",
-                "timestamp": jwt_utils.get_current_timestamp(),
-            }
-            await websocket.send_text(json.dumps(welcome_message))
+            # 一比一复刻参考项目：连接成功后立即推送未读消息数量
+            # 参考项目WebSocket直接推送数字字符串，不是JSON
+            try:
+                from apps.system.core.service.impl.message_service_impl import MessageServiceImpl
+                message_service = MessageServiceImpl()
+                unread_result = await message_service.count_unread_by_user_id(user_id, False)
+                # 推送未读消息数量（纯数字字符串）
+                await websocket.send_text(str(unread_result.total))
+                logger.info(f"WebSocket推送未读消息数量给用户 {user_id}: {unread_result.total}")
+            except Exception as e:
+                logger.error(f"Failed to send unread count for user {user_id}: {e}")
+                # 失败时发送0
+                await websocket.send_text("0")
 
             # 保持连接并处理消息
             while True:

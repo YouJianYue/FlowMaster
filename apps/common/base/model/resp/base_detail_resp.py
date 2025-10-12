@@ -8,15 +8,15 @@ from datetime import datetime
 from typing import Optional
 from pydantic import Field, ConfigDict, field_serializer
 from pydantic.alias_generators import to_camel
-from apps.common.base.model.resp.base_resp import BaseResponse
+from apps.common.base.model.resp.base_resp import BaseResp
 
 
-class BaseDetailResponse(BaseResponse):
+class BaseDetailResp(BaseResp):
     """
     详情响应模型
 
     一比一复刻参考项目 BaseDetailResp.java
-    继承 BaseResponse 并添加修改人、修改时间等详情字段
+    继承 BaseResp 并添加修改人、修改时间等详情字段
     """
 
     # 确保继承父类配置

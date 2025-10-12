@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
 
 """
-¡Ë‡ö
+åŸºç¡€æœåŠ¡æ¨¡å—
 """
+
+from .base_service import BaseService
+from .base_service_impl import BaseServiceImpl
+
+__all__ = [
+    'BaseService',
+    'BaseServiceImpl',
+]

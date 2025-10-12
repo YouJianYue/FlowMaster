@@ -10,31 +10,31 @@
 from enum import Enum
 
 
-class NoticeStatusEnum(str, Enum):
+class NoticeStatusEnum(int, Enum):
     """
     公告状态枚举
 
     一比一复刻参考项目 NoticeStatusEnum.java
+    public enum NoticeStatusEnum implements BaseEnum<Integer> {
+        DRAFT(1, "草稿"),
+        PENDING(2, "待发布"),
+        PUBLISHED(3, "已发布")
+    }
     """
 
     # 草稿
-    DRAFT = "DRAFT"
+    DRAFT = 1
 
     # 待发布
-    PENDING = "PENDING"
+    PENDING = 2
 
     # 已发布
-    PUBLISHED = "PUBLISHED"
+    PUBLISHED = 3
 
     @property
     def value_code(self) -> int:
-        """获取数值编码（一比一复刻 getValue()）"""
-        mapping = {
-            self.DRAFT: 1,
-            self.PENDING: 2,
-            self.PUBLISHED: 3,
-        }
-        return mapping[self]
+        """获取数值编码（用于BaseEnum识别）"""
+        return self.value
 
     @property
     def description(self) -> str:
@@ -57,11 +57,9 @@ class NoticeStatusEnum(str, Enum):
         return mapping[self]
 
     @classmethod
-    def from_value_code(cls, value_code: int) -> 'NoticeStatusEnum':
-        """根据数值编码获取枚举值"""
-        mapping = {
-            1: cls.DRAFT,
-            2: cls.PENDING,
-            3: cls.PUBLISHED,
-        }
-        return mapping.get(value_code)
+    def from_value(cls, value: int) -> 'NoticeStatusEnum':
+        """根据数值获取枚举值"""
+        for item in cls:
+            if item.value == value:
+                return item
+        raise ValueError(f"Invalid NoticeStatusEnum value: {value}")

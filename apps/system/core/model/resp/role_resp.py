@@ -11,11 +11,11 @@ from typing import List, Optional, Union
 from pydantic import BaseModel, Field, computed_field
 from pydantic.alias_generators import to_camel
 from pydantic import ConfigDict
-from apps.common.base.model.resp.base_detail_resp import BaseDetailResponse
+from apps.common.base.model.resp.base_detail_resp import BaseDetailResp
 from apps.common.enums.data_scope_enum import DataScopeEnum
 
 
-class RoleResp(BaseDetailResponse):
+class RoleResp(BaseDetailResp):
     """
     角色响应参数
 
@@ -86,7 +86,7 @@ class RoleResp(BaseDetailResponse):
     )
 
 
-class RoleDetailResp(BaseDetailResponse):
+class RoleDetailResp(BaseDetailResp):
     """
     角色详情响应参数
 

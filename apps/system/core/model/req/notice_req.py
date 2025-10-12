@@ -63,10 +63,10 @@ class NoticeReq(BaseModel):
         examples=["1"]
     )
 
-    # 通知范围
+    # 通知范围（一比一复刻参考项目：1=所有人, 2=指定用户）
     notice_scope: NoticeScopeEnum = Field(
         description="通知范围",
-        examples=[NoticeScopeEnum.USER]
+        examples=[2]  # 2 = NoticeScopeEnum.USER
     )
 
     # 通知用户
@@ -103,11 +103,11 @@ class NoticeReq(BaseModel):
         examples=[False]
     )
 
-    # 状态
+    # 状态（一比一复刻参考项目：1=草稿, 2=待发布, 3=已发布）
     status: Optional[NoticeStatusEnum] = Field(
         default=None,
         description="状态",
-        examples=[NoticeStatusEnum.PUBLISHED]
+        examples=[3]  # 3 = NoticeStatusEnum.PUBLISHED
     )
 
     @validator('notice_users')

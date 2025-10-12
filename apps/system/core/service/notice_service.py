@@ -63,6 +63,19 @@ class NoticeService(BaseService[NoticeResp, NoticeDetailResp, NoticeQuery, Notic
         """
         pass
 
+    @abstractmethod
+    async def read_notice(self, notice_id: int, user_id: int) -> None:
+        """
+        标记公告为已读
+
+        一比一复刻参考项目 NoticeService.readNotice()
+
+        Args:
+            notice_id: 公告ID
+            user_id: 用户ID
+        """
+        pass
+
 
 def get_notice_service() -> NoticeService:
     """获取通知服务实例"""

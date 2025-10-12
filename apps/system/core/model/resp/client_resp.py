@@ -4,13 +4,13 @@
 客户端响应模型 - 对应参考项目的ClientResp
 """
 
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel, Field, ConfigDict
-from apps.common.base.model.resp.base_detail_resp import BaseDetailResponse
+from apps.common.base.model.resp.base_detail_resp import BaseDetailResp
 from apps.common.enums.dis_enable_status_enum import DisEnableStatusEnum
 
 
-class ClientResponse(BaseDetailResponse):
+class ClientResponse(BaseDetailResp):
     """
     客户端响应参数
     

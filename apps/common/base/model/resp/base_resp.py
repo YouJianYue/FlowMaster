@@ -14,7 +14,7 @@ from pydantic.alias_generators import to_camel
 from apps.common.base.excel.excel_exporter import excel_property
 
 
-class BaseResponse(BaseModel):
+class BaseResp(BaseModel):
     """
     基础响应模型
 

@@ -6,17 +6,13 @@
 @since: 2025/5/22 22:15
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class NoticeUnreadCountResp(BaseModel):
     """未读公告数量响应参数"""
-    
-    # 未读公告数量
-    total: Optional[int] = Field(None, description="未读公告数量", examples=[1])
-    
-    def __init__(self, total: int = 0, **data):
-        super().__init__(total=total, **data)
-    
-    model_config = {"from_attributes": True}
+
+    model_config = ConfigDict(from_attributes=True)
+
+    # 未读公告数量（必填，默认0）
+    total: int = Field(default=0, description="未读公告数量", examples=[1])

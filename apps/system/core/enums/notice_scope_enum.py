@@ -10,27 +10,27 @@
 from enum import Enum
 
 
-class NoticeScopeEnum(str, Enum):
+class NoticeScopeEnum(int, Enum):
     """
     公告通知范围枚举
 
     一比一复刻参考项目 NoticeScopeEnum.java
+    public enum NoticeScopeEnum implements BaseEnum<Integer> {
+        ALL(1, "所有人"),
+        USER(2, "指定用户")
+    }
     """
 
     # 所有人
-    ALL = "ALL"
+    ALL = 1
 
     # 指定用户
-    USER = "USER"
+    USER = 2
 
     @property
     def value_code(self) -> int:
-        """获取数值编码（一比一复刻 getValue()）"""
-        mapping = {
-            self.ALL: 1,
-            self.USER: 2,
-        }
-        return mapping[self]
+        """获取数值编码（用于BaseEnum识别）"""
+        return self.value
 
     @property
     def description(self) -> str:
@@ -42,10 +42,9 @@ class NoticeScopeEnum(str, Enum):
         return mapping[self]
 
     @classmethod
-    def from_value_code(cls, value_code: int) -> 'NoticeScopeEnum':
-        """根据数值编码获取枚举值"""
-        mapping = {
-            1: cls.ALL,
-            2: cls.USER,
-        }
-        return mapping.get(value_code)
+    def from_value(cls, value: int) -> 'NoticeScopeEnum':
+        """根据数值获取枚举值"""
+        for item in cls:
+            if item.value == value:
+                return item
+        raise ValueError(f"Invalid NoticeScopeEnum value: {value}")

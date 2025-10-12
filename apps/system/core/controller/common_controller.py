@@ -53,6 +53,43 @@ async def get_data_scope_enum():
         return create_success_response(data=[])
 
 
+@router.get("/dict/{code}", response_model=ApiResponse[List[Dict[str, Any]]], summary="查询字典数据")
+async def list_dict(code: str):
+    """
+    查询字典数据
+    一比一复刻参考项目 CommonController.listDict()
+
+    参考实现:
+    ```java
+    @GetMapping("/dict/{code}")
+    public List<LabelValueResp> listDict(@PathVariable String code) {
+        return dictItemService.listByDictCode(code);
+    }
+    ```
+
+    Args:
+        code: 字典编码（支持数据库字典和枚举字典）
+
+    Returns:
+        ApiResponse[List[Dict[str, Any]]]: 字典数据列表，格式 [{label: xxx, value: xxx}, ...]
+    """
+    try:
+        logger.info(f"开始查询字典: {code}")
+        from apps.system.core.service.dict_item_service import get_dict_item_service
+
+        dict_item_service = get_dict_item_service()
+
+        # 一比一复刻参考项目：查询字典项（优先枚举缓存，再查数据库）
+        dict_items = await dict_item_service.list_by_dict_code(code)
+
+        logger.info(f"字典查询成功: {code}, 数据量: {len(dict_items)}")
+        return create_success_response(data=dict_items)
+
+    except Exception as e:
+        logger.error(f"Error getting dict {code}: {e}")
+        return create_success_response(data=[])
+
+
 @router.get("/enum", response_model=ApiResponse[Dict[str, Any]], summary="获取系统枚举值")
 async def get_system_enums():
     """
@@ -126,3 +163,56 @@ async def get_dict_options():
     except Exception as e:
         logger.error(f"Error getting dict options: {e}")
         return create_success_response(data={})
+
+
+@router.get("/dict/option/site", response_model=ApiResponse[List[Dict[str, str]]], summary="查询系统配置参数")
+async def list_site_option_dict():
+    """
+    查询系统配置参数
+    一比一复刻参考项目 CommonController.listSiteOptionDict()
+
+    参考实现:
+    ```java
+    @GetMapping("/dict/option/site")
+    @Cached(key = "'SITE'", name = CacheConstants.OPTION_KEY_PREFIX)
+    public List<LabelValueResp<String>> listSiteOptionDict() {
+        OptionQuery optionQuery = new OptionQuery();
+        optionQuery.setCategory(OptionCategoryEnum.SITE.name());
+        return optionService.list(optionQuery)
+            .stream()
+            .map(option -> new LabelValueResp<>(option.getCode(),
+                StrUtil.nullToDefault(option.getValue(), option.getDefaultValue())))
+            .toList();
+    }
+    ```
+
+    Returns:
+        ApiResponse[List[Dict[str, str]]]: 系统配置列表，格式 [{label: code, value: value}, ...]
+    """
+    try:
+        from apps.system.core.service.impl.option_service_impl import OptionServiceImpl
+        from apps.system.core.model.query.option_query import OptionQuery
+
+        option_service = OptionServiceImpl()
+
+        # 创建查询条件：category = SITE
+        query = OptionQuery()
+        query.category = "SITE"
+
+        # 查询配置列表
+        options = await option_service.list(query)
+
+        # 一比一复刻参考项目：map to LabelValueResp<String>
+        result = [
+            {
+                "label": opt.code,
+                "value": opt.value if opt.value is not None else opt.default_value
+            }
+            for opt in options
+        ]
+
+        return create_success_response(data=result)
+
+    except Exception as e:
+        logger.error(f"Error getting site option dict: {e}")
+        return create_success_response(data=[])

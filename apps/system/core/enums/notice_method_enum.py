@@ -10,27 +10,27 @@
 from enum import Enum
 
 
-class NoticeMethodEnum(str, Enum):
+class NoticeMethodEnum(int, Enum):
     """
     公告通知方式枚举
 
     一比一复刻参考项目 NoticeMethodEnum.java
+    public enum NoticeMethodEnum implements BaseEnum<Integer> {
+        SYSTEM_MESSAGE(1, "系统消息"),
+        POPUP(2, "登录弹窗")
+    }
     """
 
     # 系统消息
-    SYSTEM_MESSAGE = "SYSTEM_MESSAGE"
+    SYSTEM_MESSAGE = 1
 
     # 登录弹窗
-    POPUP = "POPUP"
+    POPUP = 2
 
     @property
     def value_code(self) -> int:
-        """获取数值编码（一比一复刻 getValue()）"""
-        mapping = {
-            self.SYSTEM_MESSAGE: 1,
-            self.POPUP: 2,
-        }
-        return mapping[self]
+        """获取数值编码（用于BaseEnum识别）"""
+        return self.value
 
     @property
     def description(self) -> str:
@@ -42,10 +42,9 @@ class NoticeMethodEnum(str, Enum):
         return mapping[self]
 
     @classmethod
-    def from_value_code(cls, value_code: int) -> 'NoticeMethodEnum':
-        """根据数值编码获取枚举值"""
-        mapping = {
-            1: cls.SYSTEM_MESSAGE,
-            2: cls.POPUP,
-        }
-        return mapping.get(value_code)
+    def from_value(cls, value: int) -> 'NoticeMethodEnum':
+        """根据数值获取枚举值"""
+        for item in cls:
+            if item.value == value:
+                return item
+        raise ValueError(f"Invalid NoticeMethodEnum value: {value}")

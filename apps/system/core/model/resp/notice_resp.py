@@ -14,7 +14,7 @@ from pydantic.alias_generators import to_camel
 from pydantic import ConfigDict
 
 from apps.common.base.model.resp.base_resp import BaseResp
-from apps.common.base.model.resp.base_detail_resp import BaseDetailResponse
+from apps.common.base.model.resp.base_detail_resp import BaseDetailResp
 from apps.system.core.enums.notice_scope_enum import NoticeScopeEnum
 from apps.system.core.enums.notice_status_enum import NoticeStatusEnum
 
@@ -29,6 +29,7 @@ class NoticeResp(BaseResp):
         from_attributes=True,
         alias_generator=to_camel,
         populate_by_name=True,
+        use_enum_values=True,  # 枚举序列化为整数值
         json_schema_extra={
             "example": {
                 "id": "1",
@@ -61,10 +62,10 @@ class NoticeResp(BaseResp):
         examples=["1"]
     )
 
-    # 通知范围
+    # 通知范围（一比一复刻参考项目：1=所有人, 2=指定用户）
     notice_scope: NoticeScopeEnum = Field(
         description="通知范围(1.所有人 2.指定用户)",
-        examples=[NoticeScopeEnum.ALL]
+        examples=[1]  # 1 = NoticeScopeEnum.ALL
     )
 
     # 通知方式
@@ -93,13 +94,11 @@ class NoticeResp(BaseResp):
         examples=[False]
     )
 
-    # 状态
+    # 状态（一比一复刻参考项目：1=草稿, 2=待发布, 3=已发布）
     status: NoticeStatusEnum = Field(
         description="状态",
-        examples=[NoticeStatusEnum.PUBLISHED]
+        examples=[3]  # 3 = NoticeStatusEnum.PUBLISHED
     )
-
-    # 是否已读
     is_read: Optional[bool] = Field(
         default=False,
         description="是否已读",
@@ -107,7 +106,7 @@ class NoticeResp(BaseResp):
     )
 
 
-class NoticeDetailResp(BaseDetailResponse):
+class NoticeDetailResp(BaseDetailResp):
     """
     公告详情响应参数
 
@@ -117,6 +116,7 @@ class NoticeDetailResp(BaseDetailResponse):
         from_attributes=True,
         alias_generator=to_camel,
         populate_by_name=True,
+        use_enum_values=True,  # 枚举序列化为整数值
         json_schema_extra={
             "example": {
                 "id": "1",
@@ -156,10 +156,10 @@ class NoticeDetailResp(BaseDetailResponse):
         examples=["这是公告内容"]
     )
 
-    # 通知范围
+    # 通知范围（一比一复刻参考项目：1=所有人, 2=指定用户）
     notice_scope: NoticeScopeEnum = Field(
         description="通知范围",
-        examples=[NoticeScopeEnum.USER]
+        examples=[2]  # 2 = NoticeScopeEnum.USER
     )
 
     # 通知用户
@@ -195,8 +195,8 @@ class NoticeDetailResp(BaseDetailResponse):
         examples=[False]
     )
 
-    # 状态
+    # 状态（一比一复刻参考项目：1=草稿, 2=待发布, 3=已发布）
     status: NoticeStatusEnum = Field(
         description="状态",
-        examples=[NoticeStatusEnum.PUBLISHED]
+        examples=[3]  # 3 = NoticeStatusEnum.PUBLISHED
     )

@@ -148,6 +148,7 @@ class DictItemService:
                     # 检查模块中的所有类
                     for name, obj in inspect.getmembers(module, inspect.isclass):
                         # 检查是否是枚举类，且有必要的属性
+                        logger.debug(f"检查类: {name} in {module_name}")
                         if self._is_base_enum(obj):
                             enum_dict = self._to_enum_dict(obj)
                             if enum_dict:
@@ -155,6 +156,8 @@ class DictItemService:
                                 key = self._to_underline_case(name).lower()
                                 self._ENUM_DICT_CACHE[key] = enum_dict
                                 logger.debug(f"缓存枚举字典: {key} ({name})")
+                        else:
+                            logger.debug(f"跳过类 {name}: 不是BaseEnum")
 
                 except Exception as e:
                     logger.debug(f"扫描模块失败 {module_name}: {e}")
@@ -177,20 +180,29 @@ class DictItemService:
             # 检查是否是枚举类
             from enum import Enum
             if not issubclass(cls, Enum):
+                logger.debug(f"类 {cls.__name__} 不是Enum子类")
                 return False
 
             # 检查是否有必要的属性（value_code, description）
             if not hasattr(cls, '__members__'):
+                logger.debug(f"类 {cls.__name__} 没有__members__属性")
                 return False
 
             # 检查枚举实例是否有必要的属性
             for member in cls:
-                if hasattr(member, 'value_code') and hasattr(member, 'description'):
+                logger.debug(f"检查枚举成员 {cls.__name__}.{member.name}")
+                has_value_code = hasattr(member, 'value_code')
+                has_description = hasattr(member, 'description')
+                logger.debug(f"  has_value_code={has_value_code}, has_description={has_description}")
+                if has_value_code and has_description:
+                    logger.debug(f"类 {cls.__name__} 是BaseEnum")
                     return True
 
+            logger.debug(f"类 {cls.__name__} 的成员没有value_code和description属性")
             return False
 
-        except Exception:
+        except Exception as e:
+            logger.debug(f"检查类失败: {e}")
             return False
 
     def _to_enum_dict(self, enum_class) -> List[Dict[str, Any]]:

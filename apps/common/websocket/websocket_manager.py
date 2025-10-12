@@ -106,26 +106,58 @@ websocket_manager = WebSocketManager()
 
 
 class WebSocketUtils:
-    """WebSocket工具类 - 参考项目的WebSocketUtils"""
+    """
+    WebSocket工具类 - 一比一复刻参考项目的WebSocketUtils
+
+    参考：top.continew.starter.messaging.websocket.util.WebSocketUtils
+    """
 
     @staticmethod
-    async def send_message(token: str, message: str) -> bool:
+    def send_message(token_or_message: str, message: str = None) -> bool:
         """
-        发送消息到指定token的连接
+        发送WebSocket消息 - 一比一复刻参考项目API
+
+        支持两种调用方式：
+        1. sendMessage(token, message) - 发送给指定token的连接
+        2. sendMessage(message) - 广播给所有在线用户
+
+        参考实现：
+        - WebSocketUtils.sendMessage(token, "1")
+        - WebSocketUtils.sendMessage("1")
 
         Args:
-            token: JWT token
-            message: 消息内容
+            token_or_message: token或消息内容
+            message: 消息内容（可选）
 
         Returns:
             bool: 发送是否成功
         """
-        return await websocket_manager.send_personal_message(token, message)
+        import asyncio
+
+        # 判断调用方式
+        if message is None:
+            # 单参数调用 - 广播模式
+            broadcast_message = token_or_message
+            try:
+                asyncio.create_task(websocket_manager.broadcast(broadcast_message))
+                return True
+            except Exception as e:
+                logger.error(f"Failed to broadcast message: {e}")
+                return False
+        else:
+            # 双参数调用 - 指定token发送
+            token = token_or_message
+            try:
+                asyncio.create_task(websocket_manager.send_personal_message(token, message))
+                return True
+            except Exception as e:
+                logger.error(f"Failed to send message to token {token[:8]}: {e}")
+                return False
 
     @staticmethod
     async def send_message_to_user(user_id: int, message: str) -> bool:
         """
-        发送消息到指定用户
+        发送消息到指定用户（扩展功能，非参考项目API）
 
         Args:
             user_id: 用户ID
@@ -135,16 +167,6 @@ class WebSocketUtils:
             bool: 发送是否成功
         """
         return await websocket_manager.send_message_to_user(user_id, message)
-
-    @staticmethod
-    async def broadcast_message(message: str):
-        """
-        广播消息到所有连接
-
-        Args:
-            message: 消息内容
-        """
-        await websocket_manager.broadcast(message)
 
     @staticmethod
     def get_online_count() -> dict:
