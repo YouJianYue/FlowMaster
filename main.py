@@ -159,8 +159,8 @@ app.add_middleware(
     exclude_paths=app_config.jwt_exclude_paths_list,
 )
 
-# 添加日志拦截中间件（记录所有操作日志）
-app.add_middleware(LogInterceptorMiddleware)
+# 🔥 注释掉日志拦截中间件，使用 @Log 装饰器替代（一比一复刻参考项目AOP方式）
+# app.add_middleware(LogInterceptorMiddleware)
 
 # 注册路由 - 按照参考项目设计
 app.include_router(auth_router)  # 认证路由 /auth

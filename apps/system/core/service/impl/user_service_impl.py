@@ -611,3 +611,60 @@ class UserServiceImpl(UserService):
 
             return user_dict_list
 
+    async def get_by_username(self, username: str) -> Optional[UserEntity]:
+        """
+        根据用户名获取用户实体
+
+        Args:
+            username: 用户名
+
+        Returns:
+            Optional[UserEntity]: 用户实体，不存在返回None
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                stmt = select(UserEntity).where(UserEntity.username == username)
+                result = await session.execute(stmt)
+                return result.scalar_one_or_none()
+        except Exception as e:
+            self.logger.error(f"根据用户名获取用户失败: {e}")
+            return None
+
+    async def get_by_email(self, email: str) -> Optional[UserEntity]:
+        """
+        根据邮箱获取用户实体
+
+        Args:
+            email: 邮箱
+
+        Returns:
+            Optional[UserEntity]: 用户实体，不存在返回None
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                stmt = select(UserEntity).where(UserEntity.email == email)
+                result = await session.execute(stmt)
+                return result.scalar_one_or_none()
+        except Exception as e:
+            self.logger.error(f"根据邮箱获取用户失败: {e}")
+            return None
+
+    async def get_by_phone(self, phone: str) -> Optional[UserEntity]:
+        """
+        根据手机号获取用户实体
+
+        Args:
+            phone: 手机号
+
+        Returns:
+            Optional[UserEntity]: 用户实体，不存在返回None
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                stmt = select(UserEntity).where(UserEntity.phone == phone)
+                result = await session.execute(stmt)
+                return result.scalar_one_or_none()
+        except Exception as e:
+            self.logger.error(f"根据手机号获取用户失败: {e}")
+            return None
+

@@ -1,249 +1,225 @@
 # -*- coding: utf-8 -*-
 
-"""
-日志写入服务 - 一比一复刻参考项目 LogDaoLocalImpl
-
-负责将操作日志写入数据库，包含完整的HTTP请求响应信息
-@author: FlowMaster
-@since: 2025/10/12
-"""
-
 import json
-from datetime import datetime
 from typing import Optional, Dict, Any
-from sqlalchemy import select
 from user_agents import parse
 
 from apps.common.config.database.database_session import DatabaseSession
 from apps.common.config.logging import get_logger
 from apps.system.core.model.entity.log_entity import LogEntity
-from apps.system.core.model.entity.user_entity import UserEntity
 from apps.common.context.user_context_holder import UserContextHolder
 
 logger = get_logger(__name__)
 
 
 class LogWriterService:
-    """
-    日志写入服务 - 一比一复刻参考项目 LogDaoLocalImpl
-
-    负责将HTTP请求/响应信息持久化到数据库
-    """
 
     @staticmethod
-    async def write_log(
-        module: str,
-        description: str,
-        request_method: str,
-        request_url: str,
-        request_headers: Dict[str, str],
-        request_body: Optional[str],
-        response_status_code: int,
-        response_headers: Dict[str, str],
-        response_body: Optional[str],
-        time_taken: int,
-        ip: str,
-        user_agent: str,
-        trace_id: Optional[str] = None
-    ) -> None:
-        """
-        写入日志到数据库
-
-        一比一复刻参考项目 LogDaoLocalImpl.add()
-
-        Args:
-            module: 所属模块
-            description: 操作描述
-            request_method: 请求方法
-            request_url: 请求URL
-            request_headers: 请求头
-            request_body: 请求体
-            response_status_code: 响应状态码
-            response_headers: 响应头
-            response_body: 响应体
-            time_taken: 耗时(毫秒)
-            ip: 客户端IP
-            user_agent: User-Agent
-            trace_id: 追踪ID
-        """
+    async def write_log_from_record(log_record: Dict[str, Any]) -> None:
         try:
-            # 解析User-Agent
+            logger.info(f"[DEBUG] LogWriterService.write_log_from_record 开始, log_record keys: {log_record.keys()}")
+
+            log_request = log_record.get("request", {})
+            log_response = log_record.get("response", {})
+
+            user_agent = log_request.get("user_agent", "Unknown")
             ua = parse(user_agent)
             browser = f"{ua.browser.family} {ua.browser.version_string}"
-            os = f"{ua.os.family} {ua.os.version_string}"
+            os_info = f"{ua.os.family} {ua.os.version_string}"
 
-            # 获取IP地址信息（简化版，实际项目可接入IP地址库）
+            ip = log_request.get("ip", "unknown")
             address = LogWriterService._get_address_from_ip(ip)
 
-            # 判断状态：HTTP状态码>=400 或 响应体中success=false 则为失败
-            status = 2 if response_status_code >= 400 else 1  # 1: 成功, 2: 失败
+            status_code = log_response.get("status_code", 200)
+            response_body = log_response.get("body")
+            status = 2 if status_code >= 400 else 1
             error_msg = None
 
-            # 解析响应体判断业务状态
             if response_body:
                 try:
-                    response_data = json.loads(response_body)
+                    response_data = json.loads(response_body) if isinstance(response_body, str) else response_body
                     if not response_data.get("success", True):
                         status = 2
                         error_msg = response_data.get("msg", "操作失败")
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, AttributeError):
                     pass
 
-            # 获取操作人ID (✅ 使用 await 调用 async 方法)
-            create_user = await LogWriterService._get_create_user(
-                request_url,
-                request_headers,
-                request_body,
-                response_body,
-                status
-            )
+            response_headers = log_response.get("headers", {})
+            trace_id = log_record.get("trace_id")
 
-            # 创建日志实体
-            log_entity = LogEntity(
-                trace_id=trace_id,
-                description=description,
-                module=module.replace("API", "").strip() if module else None,
-                request_url=request_url,
-                request_method=request_method,
-                request_headers=json.dumps(request_headers, ensure_ascii=False),
-                request_body=request_body,
-                status_code=response_status_code,
-                response_headers=json.dumps(response_headers, ensure_ascii=False),
-                response_body=response_body,
-                time_taken=time_taken,
-                ip=ip,
-                address=address,
-                browser=browser,
-                os=os,
-                status=status,
-                error_msg=error_msg,
-                create_user=create_user,
-                create_time=datetime.now()
-            )
+            description = log_record.get("description", "")
+            module = log_record.get("module", "").replace("API", "").strip() or None
+            time_taken = log_record.get("time_taken", 0)
 
-            # 异步写入数据库
+            request_url = log_request.get("url", "")
+            request_method = log_request.get("method", "")
+            request_headers = json.dumps(log_request.get("headers", {}), ensure_ascii=False)
+            request_body = log_request.get("body")
+
+            logger.info(f"[DEBUG] 准备调用 _set_create_user, url={request_url}, status={status}")
+
             async with DatabaseSession.get_session_context() as session:
+                create_user, final_description = await LogWriterService._set_create_user(
+                    session=session,
+                    request_url=request_url,
+                    request_body=request_body,
+                    response_body=response_body,
+                    status=status,
+                    original_description=description
+                )
+
+                logger.info(f"[DEBUG] _set_create_user 返回: create_user={create_user}, final_description={final_description}")
+
+                log_entity = LogEntity(
+                    trace_id=trace_id,
+                    description=final_description or description,
+                    module=module,
+                    request_url=request_url,
+                    request_method=request_method,
+                    request_headers=request_headers,
+                    request_body=request_body,
+                    status_code=status_code,
+                    response_headers=json.dumps(response_headers, ensure_ascii=False),
+                    response_body=response_body if isinstance(response_body, str) else json.dumps(response_body, ensure_ascii=False),
+                    time_taken=time_taken,
+                    ip=ip,
+                    address=address,
+                    browser=browser,
+                    os=os_info,
+                    status=status,
+                    error_msg=error_msg,
+                    create_user=create_user
+                )
+
+                logger.info(
+                    f"[DEBUG] 准备保存日志实体到数据库: id={log_entity.id}, description={log_entity.description}, create_user={log_entity.create_user}"
+                )
                 session.add(log_entity)
                 await session.commit()
+                logger.info(f"[DEBUG] 日志保存成功: id={log_entity.id}")
 
         except Exception as e:
-            # 日志写入失败不应该影响业务，只记录错误
             logger.error(f"写入操作日志失败: {e}", exc_info=True)
+            print(f"[ERROR] 写入操作日志失败: {type(e).__name__}: {str(e)}")  # 强制输出到控制台
+            import traceback
+            print(traceback.format_exc())  # 打印完整堆栈
 
     @staticmethod
     def _get_address_from_ip(ip: str) -> str:
-        """
-        根据IP获取地址信息
-
-        一比一复刻参考项目中的地址解析逻辑
-
-        Args:
-            ip: IP地址
-
-        Returns:
-            str: 地址信息
-        """
-        # TODO: 接入IP地址库实现真实地址解析
-        # 参考项目使用了第三方IP地址库
         if ip == "127.0.0.1" or ip.startswith("192.168") or ip.startswith("10."):
             return "内网IP"
         return "未知"
 
     @staticmethod
-    async def _get_create_user(
+    async def _set_create_user(
+        session,
         request_url: str,
-        request_headers: Dict[str, str],
         request_body: Optional[str],
         response_body: Optional[str],
-        status: int
-    ) -> Optional[int]:
-        """
-        获取操作人ID
-
-        一比一复刻参考项目 LogDaoLocalImpl.setCreateUser()
-
-        处理特殊场景:
-        1. 登录接口：从请求体中解析用户名/邮箱/手机号，查询用户ID
-        2. 登出接口：从响应体中获取用户ID
-        3. 普通接口：从当前上下文获取用户ID
-
-        Args:
-            request_url: 请求URL
-            request_headers: 请求头
-            request_body: 请求体
-            response_body: 响应体
-            status: 状态
-
-        Returns:
-            Optional[int]: 用户ID
-        """
+        status: int,
+        original_description: str
+    ) -> tuple[Optional[int], Optional[str]]:
         try:
-            # 1. 处理登出接口
+            logger.info(f"[DEBUG] _set_create_user 开始: url={request_url}, status={status}")
+
             if "/auth/logout" in request_url and response_body:
                 try:
-                    response_data = json.loads(response_body)
+                    response_data = json.loads(response_body) if isinstance(response_body, str) else response_body
                     if response_data.get("data"):
-                        return int(response_data["data"])
+                        user_id = int(response_data["data"])
+                        logger.info(f"[DEBUG] 从登出响应获取用户ID: {user_id}")
+                        return user_id, original_description
                 except (json.JSONDecodeError, ValueError, TypeError):
                     pass
 
-            # 2. 处理登录接口（只有成功才记录）
             if "/auth/login" in request_url and status == 1 and request_body:
-                # ✅ 使用 await 调用 async 方法
-                return await LogWriterService._get_user_id_from_login(request_body)
+                logger.info("[DEBUG] 检测到登录请求，调用 _handle_login_log")
+                result = await LogWriterService._handle_login_log(session, request_body, original_description)
+                logger.info(f"[DEBUG] _handle_login_log 返回: {result}")
+                return result
 
-            # 3. 普通接口从上下文获取
-            return UserContextHolder.get_user_id()
+            user_id = UserContextHolder.get_user_id()
+            if user_id:
+                logger.info(f"[DEBUG] 从 UserContextHolder 获取用户ID: {user_id}")
+                return user_id, original_description
+
+            logger.info("[DEBUG] 未找到用户ID，返回 None")
 
         except Exception as e:
-            logger.warning(f"获取操作人ID失败: {e}")
-            return None
+            logger.warning(f"设置操作人失败: {e}", exc_info=True)
+
+        return None, original_description
 
     @staticmethod
-    async def _get_user_id_from_login(request_body: str) -> Optional[int]:
-        """
-        从登录请求体中解析用户ID
-
-        一比一复刻参考项目登录接口的用户解析逻辑
-
-        Args:
-            request_body: 请求体JSON字符串
-
-        Returns:
-            Optional[int]: 用户ID
-        """
+    async def _handle_login_log(
+        session,
+        request_body: str,
+        original_description: str
+    ) -> tuple[Optional[int], Optional[str]]:
         try:
+            logger.info("[DEBUG] _handle_login_log 开始")
             body_data = json.loads(request_body)
             auth_type = body_data.get("authType")
+            logger.info(f"[DEBUG] auth_type={auth_type}")
 
-            # 导入需要延迟导入避免循环依赖
-            from apps.system.core.service.impl.user_service_impl import UserServiceImpl
+            # 🔥 修复：直接使用传入的session查询，不创建新的UserServiceImpl
+            from apps.system.core.model.entity.user_entity import UserEntity
+            from sqlalchemy import select
 
-            user_service = UserServiceImpl()
+            auth_type_map = {
+                "ACCOUNT": ("账号登录", "username"),  # 🔥 修复：使用大写
+                "EMAIL": ("邮箱登录", "email"),
+                "PHONE": ("手机登录", "phone"),
+                "SOCIAL": ("第三方登录", "source")
+            }
 
-            # 根据不同登录类型解析
-            if auth_type == "account":
+            if auth_type not in auth_type_map:
+                logger.info("[DEBUG] auth_type 不在映射中，返回 None")
+                return None, original_description
+
+            login_description, field_name = auth_type_map[auth_type]
+            logger.info(f"[DEBUG] login_description={login_description}, field_name={field_name}")
+
+            if auth_type == "ACCOUNT":  # 🔥 修复：使用大写
                 username = body_data.get("username")
+                logger.info(f"[DEBUG] 账号登录，username={username}")
                 if username:
-                    # ✅ 使用 await 而不是 asyncio.run()
-                    user = await user_service.get_by_username(username)
-                    return user.id if user else None
+                    stmt = select(UserEntity).where(UserEntity.username == username)
+                    result = await session.execute(stmt)
+                    user = result.scalar_one_or_none()
+                    logger.info(f"[DEBUG] 查询用户结果: user={user}")
+                    if user:
+                        logger.info(f"[DEBUG] 找到用户，返回 user.id={user.id}")
+                        return user.id, login_description
 
-            elif auth_type == "email":
+            elif auth_type == "EMAIL":  # 🔥 修复：使用大写
                 email = body_data.get("email")
+                logger.info(f"[DEBUG] 邮箱登录，email={email}")
                 if email:
-                    # ✅ 使用 await 而不是 asyncio.run()
-                    user = await user_service.get_by_email(email)
-                    return user.id if user else None
+                    stmt = select(UserEntity).where(UserEntity.email == email)
+                    result = await session.execute(stmt)
+                    user = result.scalar_one_or_none()
+                    logger.info(f"[DEBUG] 查询用户结果: user={user}")
+                    if user:
+                        logger.info(f"[DEBUG] 找到用户，返回 user.id={user.id}")
+                        return user.id, login_description
 
-            elif auth_type == "phone":
+            elif auth_type == "PHONE":  # 🔥 修复：使用大写
                 phone = body_data.get("phone")
+                logger.info(f"[DEBUG] 手机登录，phone={phone}")
                 if phone:
-                    # ✅ 使用 await 而不是 asyncio.run()
-                    user = await user_service.get_by_phone(phone)
-                    return user.id if user else None
+                    stmt = select(UserEntity).where(UserEntity.phone == phone)
+                    result = await session.execute(stmt)
+                    user = result.scalar_one_or_none()
+                    logger.info(f"[DEBUG] 查询用户结果: user={user}")
+                    if user:
+                        logger.info(f"[DEBUG] 找到用户，返回 user.id={user.id}")
+                        return user.id, login_description
+
+            logger.info("[DEBUG] 未找到用户，返回 None, login_description")
+            return None, login_description
 
         except Exception as e:
-            logger.warning(f"从登录请求中解析用户ID失败: {e}")
+            logger.error(f"处理登录日志失败: {e}", exc_info=True)
 
-        return None
+        return None, original_description

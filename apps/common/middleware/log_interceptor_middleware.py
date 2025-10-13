@@ -9,15 +9,12 @@
 """
 
 import time
-import json
 import asyncio
 from typing import Callable, Optional
 from uuid import uuid4
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import StreamingResponse
-from starlette.datastructures import Headers
 
 from apps.common.config.logging import get_logger
 from apps.common.services.log_writer_service import LogWriterService

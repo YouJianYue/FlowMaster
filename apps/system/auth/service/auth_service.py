@@ -72,8 +72,21 @@ class AuthService:
 
             return login_resp
 
+        except BusinessException:
+            # 业务异常直接抛出，不需要额外日志
+            raise
         except Exception as e:
-            raise  # 重新抛出异常
+            # 🔥 打印详细的异常信息
+            import traceback
+            print(f"[ERROR] 登录失败: {type(e).__name__}: {str(e)}")
+            print(traceback.format_exc())
+
+            from apps.common.config.logging import get_logger
+            logger = get_logger(__name__)
+            logger.error(f"登录失败: {type(e).__name__}: {str(e)}", exc_info=True)
+
+            # 重新抛出异常
+            raise BusinessException(f"登录失败: {str(e)}")
     
     async def logout(self, token: str) -> bool:
         """

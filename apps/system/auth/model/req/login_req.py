@@ -12,9 +12,9 @@ from apps.system.auth.enums.auth_enums import AuthTypeEnum
 class LoginReq(BaseModel):
     """登录请求基类"""
 
-    # 客户端ID - 必填字段
+    # 客户端ID - 可选字段，默认为"web"
     client_id: str = Field(
-        ...,
+        default="web",  # 默认值为"web"
         min_length=1,
         description="客户端 ID",
         examples=["ef51c9a3e9046c4f2ea45142c8a8344a", "web"],
