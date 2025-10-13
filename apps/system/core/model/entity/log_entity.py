@@ -6,10 +6,10 @@
 
 from typing import Optional
 from sqlalchemy import Column, String, Integer, DateTime, Text, BigInteger
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.base_create_entity import BaseCreateEntity
 
 
-class LogEntity(BaseEntity):
+class LogEntity(BaseCreateEntity):
     """
     系统日志实体
 

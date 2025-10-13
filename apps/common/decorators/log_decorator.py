@@ -175,10 +175,15 @@ def _decorate_method(func: Callable, module: str, ignore: bool, include: Include
             raise
 
     # 根据方法类型返回对应的包装器
-    if inspect.iscoroutinefunction(func):
-        return async_wrapper
-    else:
-        return sync_wrapper
+    wrapper = async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
+
+    # 添加日志元数据属性，供中间件识别
+    wrapper._log_module = module
+    wrapper._log_description = description
+    wrapper._log_ignore = ignore
+    wrapper._log_include = include
+
+    return wrapper
 
 
 def _extract_request_info(args: tuple, kwargs: dict, include: Include) -> Dict[str, Any]:

@@ -18,6 +18,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# 🔥 首先配置 watchfiles 日志级别（必须在 uvicorn 启动前）
+import logging
+logging.getLogger('watchfiles').setLevel(logging.WARNING)
+logging.getLogger('watchfiles.main').setLevel(logging.WARNING)
+
 # 🔥 在 FastAPI 应用创建之前就初始化日志系统
 from apps.common.config.logging import setup_logging
 
@@ -27,6 +32,7 @@ from apps.common.controller import captcha_router, common_router, tenant_router
 from apps.system.core.controller.user_message_controller import (
     router as user_message_router,
 )
+from apps.system.core.controller.file_controller import router as file_router
 from apps.system.core.controller.dashboard_controller import router as dashboard_router
 from apps.system.core.controller.dept_controller import router as dept_router
 from apps.system.core.controller.user_controller import router as user_router
@@ -38,6 +44,7 @@ from apps.system.core.controller.notice_controller import router as notice_route
 from apps.system.core.controller.dict_controller import router as dict_router
 from apps.system.core.controller.dict_item_controller import router as dict_item_router
 from apps.system.core.controller.option_controller import router as option_router
+from apps.system.core.controller.log_controller import router as log_router
 
 # 导入WebSocket路由 (修复循环导入问题后重新启用)
 from apps.common.websocket.websocket_controller import (
@@ -47,6 +54,7 @@ from apps.common.websocket.websocket_controller import (
 
 # 导入中间件
 from apps.common.middleware.jwt_auth_middleware import JWTAuthMiddleware
+from apps.common.middleware.log_interceptor_middleware import LogInterceptorMiddleware
 
 # 导入异常处理器
 from apps.common.config.exception.global_exception_handler import (
@@ -151,6 +159,9 @@ app.add_middleware(
     exclude_paths=app_config.jwt_exclude_paths_list,
 )
 
+# 添加日志拦截中间件（记录所有操作日志）
+app.add_middleware(LogInterceptorMiddleware)
+
 # 注册路由 - 按照参考项目设计
 app.include_router(auth_router)  # 认证路由 /auth
 app.include_router(captcha_router)  # 验证码路由 /common
@@ -169,6 +180,8 @@ app.include_router(role_router)  # 角色管理路由
 app.include_router(system_common_router)  # 系统通用路由
 app.include_router(user_profile_router)  # 个人信息路由
 app.include_router(notice_router)  # 通知公告路由
+app.include_router(file_router)  # 文件管理路由
+app.include_router(log_router)  # 系统日志路由
 
 # 注册WebSocket路由 (修复循环导入问题后重新启用)
 app.include_router(websocket_router)  # WebSocket连接路由
@@ -227,13 +240,37 @@ async def test_post(data: dict):
     return {"message": "POST请求成功", "received": data}
 
 
+# 🔥 测试日志记录功能的接口
+from apps.common.decorators.log_decorator import Log
+
+@app.post("/test/log", summary="测试日志记录")
+@Log(module="测试模块", description="测试日志记录功能")
+async def test_log(data: dict):
+    """测试日志记录是否正常工作"""
+    return {"message": "日志记录测试成功", "received": data}
+
+
 if __name__ == "__main__":
+    # 自定义日志配置,抑制 watchfiles DEBUG 日志
+    log_config = uvicorn.config.LOGGING_CONFIG.copy()
+    log_config["loggers"]["watchfiles"] = {
+        "level": "WARNING",
+        "handlers": ["default"],
+        "propagate": False,
+    }
+    log_config["loggers"]["watchfiles.main"] = {
+        "level": "WARNING",
+        "handlers": ["default"],
+        "propagate": False,
+    }
+
     uvicorn.run(
         "main:app",
         host=app_config.app_host,
         port=app_config.app_port,
         reload=app_config.app_reload,
         log_level="info",
+        log_config=log_config,  # 使用自定义日志配置
         # 启用访问日志以便看到错误信息
         access_log=True,
     )

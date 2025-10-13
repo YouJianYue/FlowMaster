@@ -136,16 +136,17 @@ class FlowMasterLogger:
         # aiosqlite 日志 - 关闭DEBUG输出
         logging.getLogger('aiosqlite').setLevel(logging.WARNING)
 
-        # FastAPI/Uvicorn 日志接管 - 核心解决方案
-        # 让 uvicorn 的所有日志都通过我们的日志系统输出
-        uvicorn_loggers = ['uvicorn', 'uvicorn.access', 'uvicorn.error', 'uvicorn.asgi']
-        for logger_name in uvicorn_loggers:
-            logger = logging.getLogger(logger_name)
-            logger.setLevel(logging.INFO)
-            logger.propagate = True  # 传播到 root logger，使用我们的格式
-            # 完全清空 uvicorn 的 handlers，防止重复输出
-            if logger.handlers:
-                logger.handlers.clear()
+        # Uvicorn 日志配置
+        # uvicorn.error - 服务器启动/关闭日志
+        uvicorn_error = logging.getLogger('uvicorn.error')
+        uvicorn_error.setLevel(logging.INFO)
+        uvicorn_error.propagate = True
+
+        # uvicorn.access - HTTP访问日志 (保留handlers以确保输出)
+        uvicorn_access = logging.getLogger('uvicorn.access')
+        uvicorn_access.setLevel(logging.INFO)
+        uvicorn_access.propagate = True
+        # ⚠️ 不清空access的handlers,保留uvicorn默认的访问日志输出
 
         # HTTP 客户端日志
         logging.getLogger('httpx').setLevel(logging.WARNING)
@@ -153,6 +154,19 @@ class FlowMasterLogger:
 
         # 其他第三方库日志
         logging.getLogger('passlib').setLevel(logging.ERROR)  # 完全抑制 passlib 警告日志
+
+        # watchfiles日志 - 强制设置为WARNING并清除现有handlers
+        watchfiles_logger = logging.getLogger('watchfiles')
+        watchfiles_logger.setLevel(logging.WARNING)
+        # 清除watchfiles的所有handlers,避免DEBUG日志输出
+        for handler in watchfiles_logger.handlers[:]:
+            watchfiles_logger.removeHandler(handler)
+        
+        # watchfiles.main 子模块也需要设置
+        watchfiles_main_logger = logging.getLogger('watchfiles.main')
+        watchfiles_main_logger.setLevel(logging.WARNING)
+        for handler in watchfiles_main_logger.handlers[:]:
+            watchfiles_main_logger.removeHandler(handler)
     
     def get_logger(self, name: str) -> logging.Logger:
         """获取指定名称的logger"""

@@ -46,8 +46,8 @@ class FileEntity(BaseEntity):
     # SHA256值
     sha256: Optional[str] = Column(String(256), nullable=True, comment="SHA256值")
 
-    # 元数据
-    file_metadata: Optional[str] = Column(Text, nullable=True, comment="元数据")
+    # 元数据（使用file_metadata避免与SQLAlchemy的metadata冲突）
+    file_metadata: Optional[str] = Column("metadata", Text, nullable=True, comment="元数据")
 
     # 缩略图名称
     thumbnail_name: Optional[str] = Column(String(255), nullable=True, comment="缩略图名称")

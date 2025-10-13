@@ -4,6 +4,9 @@
 认证控制器
 """
 
+import time
+import json
+import asyncio
 from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -30,12 +33,15 @@ from apps.system.auth.service.auth_service import AuthService
 # 🔥 使用 @Log 装饰器替代手动日志配置
 from apps.common.decorators import Log, Include
 
+# 🔥 导入日志写入服务，用于显式记录登录日志
+from apps.common.services.log_writer_service import LogWriterService
+from uuid import uuid4
+
 # 创建路由
 router = APIRouter(prefix="/auth", tags=["认证管理"])
 
 
 # 🔥 一比一复刻参考项目：为登录接口添加日志记录
-@Log(module="登录", description="用户登录")
 @router.post(
     "/login",
     response_model=ApiResponse[LoginResp],
@@ -46,6 +52,8 @@ async def login(request: LoginRequestUnion, http_request: Request, auth_service:
     """
     用户登录 - 支持多种登录方式
 
+    显式记录登录日志到数据库，包含完整的HTTP请求响应信息
+
     Args:
         request: 登录请求参数（支持账号、邮箱、手机、第三方登录）
         http_request: HTTP请求对象
@@ -54,11 +62,124 @@ async def login(request: LoginRequestUnion, http_request: Request, auth_service:
     Returns:
         ApiResponse[LoginResp]: 登录响应
     """
+    # 🔥 生成追踪ID
+    trace_id = str(uuid4())
+
+    # 🔥 记录开始时间
+    start_time = time.time()
+
+    # 🔥 捕获请求信息
+    request_method = http_request.method
+    request_url = str(http_request.url)
+    request_headers = dict(http_request.headers)
+
+    # 获取客户端IP
+    forwarded_for = http_request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        ip = forwarded_for.split(",")[0].strip()
+    elif http_request.headers.get("x-real-ip"):
+        ip = http_request.headers.get("x-real-ip")
+    elif http_request.client:
+        ip = http_request.client.host
+    else:
+        ip = "unknown"
+
+    # 获取User-Agent
+    user_agent = http_request.headers.get("user-agent", "Unknown")
+
+    # 获取请求体（将Pydantic模型转为JSON字符串）
+    try:
+        request_body = request.model_dump_json()
+    except Exception:
+        request_body = str(request)
+
+    # 初始化响应信息
+    response_status_code = 200
+    response_body = None
+    status = 2  # 默认失败
+    error_msg = None
+
     try:
         # 一比一复刻参考项目实现：直接调用service层，不在Controller处理业务逻辑
         login_resp = await auth_service.login(request, http_request)
-        return create_success_response(data=login_resp)
+
+        # 🔥 构建成功响应
+        response = create_success_response(data=login_resp)
+
+        # 🔥 捕获响应信息
+        response_status_code = 200
+        response_body = json.dumps(response.model_dump(), ensure_ascii=False)
+        status = 1  # 成功
+
+        # 🔥 计算耗时（毫秒）
+        time_taken = int((time.time() - start_time) * 1000)
+
+        # 🔥 异步写入登录日志到数据库（不阻塞响应）
+        asyncio.create_task(
+            LogWriterService.write_log(
+                module="登录",
+                description="用户登录",
+                request_method=request_method,
+                request_url=request_url,
+                request_headers=request_headers,
+                request_body=request_body,
+                response_status_code=response_status_code,
+                response_headers={},  # 响应头在这里还未设置
+                response_body=response_body,
+                time_taken=time_taken,
+                ip=ip,
+                user_agent=user_agent,
+                trace_id=trace_id
+            )
+        )
+
+        return response
+
     except Exception as e:
+        # 🔥 捕获异常信息
+        status = 2  # 失败
+        error_msg = str(e)
+
+        # 根据异常类型设置响应状态码
+        if isinstance(e, BusinessException):
+            response_status_code = 200  # 业务异常也返回200，错误码在响应体中
+            response_body = json.dumps({
+                "success": False,
+                "code": "500",
+                "msg": error_msg,
+                "data": None
+            }, ensure_ascii=False)
+        else:
+            response_status_code = 500
+            response_body = json.dumps({
+                "success": False,
+                "code": "500",
+                "msg": f"登录失败: {error_msg}",
+                "data": None
+            }, ensure_ascii=False)
+
+        # 🔥 计算耗时（毫秒）
+        time_taken = int((time.time() - start_time) * 1000)
+
+        # 🔥 异步写入失败日志到数据库
+        asyncio.create_task(
+            LogWriterService.write_log(
+                module="登录",
+                description="用户登录",
+                request_method=request_method,
+                request_url=request_url,
+                request_headers=request_headers,
+                request_body=request_body,
+                response_status_code=response_status_code,
+                response_headers={},
+                response_body=response_body,
+                time_taken=time_taken,
+                ip=ip,
+                user_agent=user_agent,
+                trace_id=trace_id
+            )
+        )
+
         raise  # 重新抛出异常，让全局异常处理器处理
 
 
