@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from apps.system.core.model.query.log_query import LogQuery
 from apps.system.core.model.resp.log_resp import LogResp
+from apps.system.core.model.resp.log_detail_resp import LogDetailResp
 from apps.common.models.page_query import PageQuery
 from apps.common.models.page_resp import PageResp
 
@@ -14,5 +15,5 @@ class LogService(ABC):
         pass
 
     @abstractmethod
-    async def get(self, log_id: int) -> LogResp:
+    async def get(self, log_id: int) -> LogDetailResp:
         pass

@@ -9,7 +9,6 @@ import functools
 import inspect
 import json
 import time
-from datetime import datetime
 from typing import Any, Callable, Optional, Union, Dict
 from enum import Enum
 from uuid import uuid4
@@ -22,7 +21,7 @@ from apps.common.util.network_utils import NetworkUtils
 
 
 class Include(Enum):
-    """日志包含内容枚举 - 复刻参考项目 Include 枚举"""
+    """日志包含内容枚举 """
     ALL = "ALL"              # 包含所有信息
     REQUEST_PARAMS = "REQUEST_PARAMS"  # 包含请求参数
     RESPONSE_DATA = "RESPONSE_DATA"    # 包含响应数据
@@ -113,61 +112,44 @@ def _decorate_method(func: Callable, module: str, ignore: bool, include: Include
         return func
 
     # 获取日志器
-    logger = get_logger(f"flowmaster.{module.lower()}" if module else func.   __module__)
+    module_name = module.lower() if module else getattr(func, '__module__', 'flowmaster')
+    logger = get_logger(f"flowmaster.{module_name}" if module else module_name)
 
     @functools.wraps(func)
     async def async_wrapper(*args, **kwargs):
-        print(f"[TRACE 1] @Log装饰器开始: module={module}, func={func.__name__}")
         logger.info(f"[DEBUG] @Log装饰器被调用: module={module}, description={description}, func={func.__name__}")
 
         # 提取Request对象
-        print("[TRACE 2] 提取Request对象")
         request = _extract_request(args, kwargs)
-        print(f"[TRACE 3] Request对象: {request}")
 
         if not request:
             # 如果没有Request对象，降级为简单日志
-            print("[TRACE 4] 没有Request对象，使用简单日志")
             return await _simple_log_wrapper(func, logger, module, description, args, kwargs)
 
-        # 🔥 一比一复刻参考项目：生成trace_id
-        print("[TRACE 5] 生成trace_id")
         trace_id = str(uuid4())
 
-        # 🔥 记录开始时间
-        print("[TRACE 6] 记录开始时间")
         start_time = time.time()
 
-        # 🔥 捕获请求信息
-        print("[TRACE 7] 捕获请求信息")
         request_info = await _capture_request_info(request, args, kwargs, include)
-        print("[TRACE 8] 请求信息已捕获")
 
         # 记录请求开始日志（控制台）
         operation = description or f"{module}" if module else func.__name__
-        print(f"[TRACE 9] 记录开始日志: {operation}")
         logger.info(f"[{operation}] 开始执行")
 
         try:
-            print("[TRACE 10] 准备执行原方法")
             # 执行原方法
             if inspect.iscoroutinefunction(func):
                 result = await func(*args, **kwargs)
             else:
                 result = func(*args, **kwargs)
 
-            print("[TRACE 11] 原方法执行成功")
-
-            # 🔥 计算耗时（毫秒）
             time_taken = int((time.time() - start_time) * 1000)
 
-            # 🔥 捕获响应信息
             response_info = _capture_response_info(result)
 
             # 记录成功日志（控制台）
             logger.info(f"[{operation}] 执行成功，耗时: {time_taken}ms")
 
-            # 🔥 一比一复刻参考项目：异步持久化到数据库
             try:
                 logger.info(f"[DEBUG] 准备持久化日志: module={module}, description={operation}, url={request_info.get('url')}")
                 await _persist_log_to_db(
@@ -181,23 +163,15 @@ def _decorate_method(func: Callable, module: str, ignore: bool, include: Include
                 logger.info("[DEBUG] 日志持久化成功")
             except Exception as log_error:
                 logger.error(f"日志持久化失败: {log_error}", exc_info=True)
-                print(f"[ERROR] 日志持久化失败: {log_error}")  # 强制输出到控制台
-                import traceback
-                print(traceback.format_exc())  # 打印完整堆栈
-
             return result
 
         except Exception as e:
-            # 🔥 计算耗时（毫秒）
+
             time_taken = int((time.time() - start_time) * 1000)
 
             # 记录异常日志（控制台）
             logger.error(f"[{operation}] 执行失败，耗时: {time_taken}ms，错误: {str(e)}", exc_info=True)
-            print(f"[ERROR] [{operation}] 执行失败: {type(e).__name__}: {str(e)}")  # 强制输出到控制台
-            import traceback
-            print(traceback.format_exc())  # 打印完整堆栈
 
-            # 🔥 捕获异常响应信息
             response_info = {
                 "status_code": 500,
                 "headers": {},
@@ -209,7 +183,6 @@ def _decorate_method(func: Callable, module: str, ignore: bool, include: Include
                 }, ensure_ascii=False)
             }
 
-            # 🔥 异步持久化失败日志到数据库
             try:
                 await _persist_log_to_db(
                     module=module,
@@ -221,7 +194,6 @@ def _decorate_method(func: Callable, module: str, ignore: bool, include: Include
                 )
             except Exception as log_error:
                 logger.warning(f"日志持久化失败: {log_error}", exc_info=True)
-                print(f"[ERROR] 日志持久化失败: {log_error}")  # 强制输出到控制台
 
             # 重新抛出异常
             raise
@@ -298,9 +270,20 @@ def _extract_request(args: tuple, kwargs: dict) -> Optional[Request]:
     return None
 
 
-async def _capture_request_info(request: Request, args: tuple, kwargs: dict, include: Include) -> Dict[str, Any]:
+async def _capture_request_info(
+    request: Request,
+    _args: tuple,
+    _kwargs: dict,
+    _include: Include
+) -> Dict[str, Any]:
     """
     捕获请求信息 - 一比一复刻参考项目 LogRequest
+
+    Args:
+        request: FastAPI Request对象
+        _args: 方法位置参数（保留用于未来扩展，暂未使用）
+        _kwargs: 方法关键字参数（保留用于未来扩展，暂未使用）
+        _include: 日志包含内容类型（保留用于未来扩展，暂未使用）
     """
     # 获取请求体
     request_body = None
@@ -310,7 +293,8 @@ async def _capture_request_info(request: Request, args: tuple, kwargs: dict, inc
             body_bytes = await request.body()
             if body_bytes:
                 request_body = body_bytes.decode('utf-8')
-        except Exception:
+        except (ValueError, TypeError, UnicodeDecodeError):
+            # 日志记录失败不应中断业务
             request_body = None
 
     return {
@@ -356,7 +340,8 @@ def _capture_response_info(result: Any) -> Dict[str, Any]:
                 "headers": {},
                 "body": json.dumps(result, ensure_ascii=False, default=str)
             }
-        except Exception:
+        except (TypeError, ValueError):
+            # JSON序列化失败降级处理
             return {
                 "status_code": 200,
                 "headers": {},
@@ -386,7 +371,6 @@ async def _persist_log_to_db(
             "response": response_info,
             "time_taken": time_taken,
             "trace_id": trace_id
-            # 🔥 create_time 由 BaseCreateEntity 自动管理，不需要传递
         }
 
         await LogWriterService.write_log_from_record(log_record)

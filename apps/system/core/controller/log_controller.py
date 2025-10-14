@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 from apps.system.core.model.query.log_query import LogQuery
 from apps.system.core.model.resp.log_resp import LogResp
+from apps.system.core.model.resp.log_detail_resp import LogDetailResp
 from apps.system.core.service.log_service import LogService
 from apps.system.core.service.impl.log_service_impl import get_log_service
 from apps.common.models.page_query import PageQuery
@@ -25,10 +26,10 @@ async def page(
 
 
 @Log(ignore=True)
-@router.get("/{id}", response_model=ApiResponse[LogResp], summary="查询详情")
+@router.get("/{id}", response_model=ApiResponse[LogDetailResp], summary="查询详情")
 async def get(
     id: int,
     log_service: LogService = Depends(get_log_service)
-) -> ApiResponse[LogResp]:
+) -> ApiResponse[LogDetailResp]:
     result = await log_service.get(id)
     return create_success_response(data=result)

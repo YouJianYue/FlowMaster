@@ -140,13 +140,12 @@ class FlowMasterLogger:
         # uvicorn.error - 服务器启动/关闭日志
         uvicorn_error = logging.getLogger('uvicorn.error')
         uvicorn_error.setLevel(logging.INFO)
-        uvicorn_error.propagate = True
+        uvicorn_error.propagate = False  # 不传播到root logger
 
-        # uvicorn.access - HTTP访问日志 (保留handlers以确保输出)
+        # uvicorn.access - HTTP访问日志 (只保留uvicorn自己的handler，避免重复)
         uvicorn_access = logging.getLogger('uvicorn.access')
         uvicorn_access.setLevel(logging.INFO)
-        uvicorn_access.propagate = True
-        # ⚠️ 不清空access的handlers,保留uvicorn默认的访问日志输出
+        uvicorn_access.propagate = False
 
         # HTTP 客户端日志
         logging.getLogger('httpx').setLevel(logging.WARNING)

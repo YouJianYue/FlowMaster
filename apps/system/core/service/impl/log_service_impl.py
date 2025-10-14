@@ -9,6 +9,7 @@ from apps.system.core.model.entity.log_entity import LogEntity
 from apps.system.core.model.entity.user_entity import UserEntity
 from apps.system.core.model.query.log_query import LogQuery
 from apps.system.core.model.resp.log_resp import LogResp
+from apps.system.core.model.resp.log_detail_resp import LogDetailResp
 from apps.common.models.page_query import PageQuery
 from apps.common.models.page_resp import PageResp
 from apps.common.config.database.database_session import DatabaseSession
@@ -88,15 +89,24 @@ class LogServiceImpl(LogService):
                 pages=pages
             )
 
-    async def get(self, log_id: int) -> LogResp:
+    async def get(self, log_id: int) -> LogDetailResp:
+        """查询日志详情 - 返回完整信息"""
         async with DatabaseSession.get_session_context() as session:
             t1 = aliased(LogEntity)
             t2 = aliased(UserEntity)
 
             stmt = select(
                 t1.id,
+                t1.trace_id,
                 t1.description,
                 t1.module,
+                t1.request_url,
+                t1.request_method,
+                t1.request_headers,
+                t1.request_body,
+                t1.status_code,
+                t1.response_headers,
+                t1.response_body,
                 t1.time_taken,
                 t1.ip,
                 t1.address,
@@ -115,7 +125,7 @@ class LogServiceImpl(LogService):
             if not row:
                 raise BusinessException(f"日志不存在: {log_id}")
 
-            return LogResp.model_validate(dict(row._mapping))
+            return LogDetailResp.model_validate(dict(row._mapping))
 
 
 def get_log_service() -> LogService:

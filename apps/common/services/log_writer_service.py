@@ -13,11 +13,12 @@ logger = get_logger(__name__)
 
 
 class LogWriterService:
-
     @staticmethod
     async def write_log_from_record(log_record: Dict[str, Any]) -> None:
         try:
-            logger.info(f"[DEBUG] LogWriterService.write_log_from_record 开始, log_record keys: {log_record.keys()}")
+            logger.info(
+                f"[DEBUG] LogWriterService.write_log_from_record 开始, log_record keys: {log_record.keys()}"
+            )
 
             log_request = log_record.get("request", {})
             log_response = log_record.get("response", {})
@@ -37,7 +38,11 @@ class LogWriterService:
 
             if response_body:
                 try:
-                    response_data = json.loads(response_body) if isinstance(response_body, str) else response_body
+                    response_data = (
+                        json.loads(response_body)
+                        if isinstance(response_body, str)
+                        else response_body
+                    )
                     if not response_data.get("success", True):
                         status = 2
                         error_msg = response_data.get("msg", "操作失败")
@@ -53,22 +58,31 @@ class LogWriterService:
 
             request_url = log_request.get("url", "")
             request_method = log_request.get("method", "")
-            request_headers = json.dumps(log_request.get("headers", {}), ensure_ascii=False)
+            request_headers = json.dumps(
+                log_request.get("headers", {}), ensure_ascii=False
+            )
             request_body = log_request.get("body")
 
-            logger.info(f"[DEBUG] 准备调用 _set_create_user, url={request_url}, status={status}")
+            logger.info(
+                f"[DEBUG] 准备调用 _set_create_user, url={request_url}, status={status}"
+            )
 
             async with DatabaseSession.get_session_context() as session:
-                create_user, final_description = await LogWriterService._set_create_user(
+                (
+                    create_user,
+                    final_description,
+                ) = await LogWriterService._set_create_user(
                     session=session,
                     request_url=request_url,
                     request_body=request_body,
                     response_body=response_body,
                     status=status,
-                    original_description=description
+                    original_description=description,
                 )
 
-                logger.info(f"[DEBUG] _set_create_user 返回: create_user={create_user}, final_description={final_description}")
+                logger.info(
+                    f"[DEBUG] _set_create_user 返回: create_user={create_user}, final_description={final_description}"
+                )
 
                 log_entity = LogEntity(
                     trace_id=trace_id,
@@ -80,7 +94,9 @@ class LogWriterService:
                     request_body=request_body,
                     status_code=status_code,
                     response_headers=json.dumps(response_headers, ensure_ascii=False),
-                    response_body=response_body if isinstance(response_body, str) else json.dumps(response_body, ensure_ascii=False),
+                    response_body=response_body
+                    if isinstance(response_body, str)
+                    else json.dumps(response_body, ensure_ascii=False),
                     time_taken=time_taken,
                     ip=ip,
                     address=address,
@@ -88,7 +104,7 @@ class LogWriterService:
                     os=os_info,
                     status=status,
                     error_msg=error_msg,
-                    create_user=create_user
+                    create_user=create_user,
                 )
 
                 logger.info(
@@ -100,8 +116,11 @@ class LogWriterService:
 
         except Exception as e:
             logger.error(f"写入操作日志失败: {e}", exc_info=True)
-            print(f"[ERROR] 写入操作日志失败: {type(e).__name__}: {str(e)}")  # 强制输出到控制台
+            print(
+                f"[ERROR] 写入操作日志失败: {type(e).__name__}: {str(e)}"
+            )  # 强制输出到控制台
             import traceback
+
             print(traceback.format_exc())  # 打印完整堆栈
 
     @staticmethod
@@ -117,14 +136,20 @@ class LogWriterService:
         request_body: Optional[str],
         response_body: Optional[str],
         status: int,
-        original_description: str
+        original_description: str,
     ) -> tuple[Optional[int], Optional[str]]:
         try:
-            logger.info(f"[DEBUG] _set_create_user 开始: url={request_url}, status={status}")
+            logger.info(
+                f"[DEBUG] _set_create_user 开始: url={request_url}, status={status}"
+            )
 
             if "/auth/logout" in request_url and response_body:
                 try:
-                    response_data = json.loads(response_body) if isinstance(response_body, str) else response_body
+                    response_data = (
+                        json.loads(response_body)
+                        if isinstance(response_body, str)
+                        else response_body
+                    )
                     if response_data.get("data"):
                         user_id = int(response_data["data"])
                         logger.info(f"[DEBUG] 从登出响应获取用户ID: {user_id}")
@@ -133,17 +158,14 @@ class LogWriterService:
                     pass
 
             if "/auth/login" in request_url and status == 1 and request_body:
-                logger.info("[DEBUG] 检测到登录请求，调用 _handle_login_log")
-                result = await LogWriterService._handle_login_log(session, request_body, original_description)
-                logger.info(f"[DEBUG] _handle_login_log 返回: {result}")
+                result = await LogWriterService._handle_login_log(
+                    session, request_body, original_description
+                )
                 return result
 
             user_id = UserContextHolder.get_user_id()
             if user_id:
-                logger.info(f"[DEBUG] 从 UserContextHolder 获取用户ID: {user_id}")
                 return user_id, original_description
-
-            logger.info("[DEBUG] 未找到用户ID，返回 None")
 
         except Exception as e:
             logger.warning(f"设置操作人失败: {e}", exc_info=True)
@@ -152,69 +174,52 @@ class LogWriterService:
 
     @staticmethod
     async def _handle_login_log(
-        session,
-        request_body: str,
-        original_description: str
+        session, request_body: str, original_description: str
     ) -> tuple[Optional[int], Optional[str]]:
         try:
-            logger.info("[DEBUG] _handle_login_log 开始")
             body_data = json.loads(request_body)
             auth_type = body_data.get("authType")
-            logger.info(f"[DEBUG] auth_type={auth_type}")
 
-            # 🔥 修复：直接使用传入的session查询，不创建新的UserServiceImpl
             from apps.system.core.model.entity.user_entity import UserEntity
             from sqlalchemy import select
 
             auth_type_map = {
-                "ACCOUNT": ("账号登录", "username"),  # 🔥 修复：使用大写
+                "ACCOUNT": ("账号登录", "username"),
                 "EMAIL": ("邮箱登录", "email"),
                 "PHONE": ("手机登录", "phone"),
-                "SOCIAL": ("第三方登录", "source")
+                "SOCIAL": ("第三方登录", "source"),
             }
 
             if auth_type not in auth_type_map:
-                logger.info("[DEBUG] auth_type 不在映射中，返回 None")
                 return None, original_description
 
             login_description, field_name = auth_type_map[auth_type]
-            logger.info(f"[DEBUG] login_description={login_description}, field_name={field_name}")
 
-            if auth_type == "ACCOUNT":  # 🔥 修复：使用大写
-                username = body_data.get("username")
-                logger.info(f"[DEBUG] 账号登录，username={username}")
-                if username:
-                    stmt = select(UserEntity).where(UserEntity.username == username)
-                    result = await session.execute(stmt)
-                    user = result.scalar_one_or_none()
-                    logger.info(f"[DEBUG] 查询用户结果: user={user}")
-                    if user:
-                        logger.info(f"[DEBUG] 找到用户，返回 user.id={user.id}")
-                        return user.id, login_description
+            # 🔥 重构：统一查询逻辑，消除重复代码
+            field_value = body_data.get(field_name)
+            if not field_value:
+                return None, login_description
 
-            elif auth_type == "EMAIL":  # 🔥 修复：使用大写
-                email = body_data.get("email")
-                logger.info(f"[DEBUG] 邮箱登录，email={email}")
-                if email:
-                    stmt = select(UserEntity).where(UserEntity.email == email)
-                    result = await session.execute(stmt)
-                    user = result.scalar_one_or_none()
-                    logger.info(f"[DEBUG] 查询用户结果: user={user}")
-                    if user:
-                        logger.info(f"[DEBUG] 找到用户，返回 user.id={user.id}")
-                        return user.id, login_description
+            logger.info(f"[DEBUG] {login_description}，{field_name}={field_value}")
 
-            elif auth_type == "PHONE":  # 🔥 修复：使用大写
-                phone = body_data.get("phone")
-                logger.info(f"[DEBUG] 手机登录，phone={phone}")
-                if phone:
-                    stmt = select(UserEntity).where(UserEntity.phone == phone)
-                    result = await session.execute(stmt)
-                    user = result.scalar_one_or_none()
-                    logger.info(f"[DEBUG] 查询用户结果: user={user}")
-                    if user:
-                        logger.info(f"[DEBUG] 找到用户，返回 user.id={user.id}")
-                        return user.id, login_description
+            # 根据字段名动态构建查询条件
+            if auth_type == "ACCOUNT":
+                stmt = select(UserEntity).where(UserEntity.username == field_value)
+            elif auth_type == "EMAIL":
+                stmt = select(UserEntity).where(UserEntity.email == field_value)
+            elif auth_type == "PHONE":
+                stmt = select(UserEntity).where(UserEntity.phone == field_value)
+            else:
+                # SOCIAL类型暂不处理
+                return None, login_description
+
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+
+            logger.info(f"[DEBUG] 查询用户结果: user={user}")
+            if user:
+                logger.info(f"[DEBUG] 找到用户，返回 user.id={user.id}")
+                return user.id, login_description
 
             logger.info("[DEBUG] 未找到用户，返回 None, login_description")
             return None, login_description
