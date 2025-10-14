@@ -65,6 +65,14 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 # Token无效
                 return self._create_unauthorized_response("无效的访问令牌")
 
+            # 🔥 检查是否已被强退（检查Redis中是否还有在线用户信息）
+            from apps.common.util.redis_utils import RedisUtils
+            token_key = f"online_user:{token}"
+            online_user_data = await RedisUtils.get(token_key)
+            if not online_user_data:
+                # Redis中没有在线用户信息，说明已被强退或登出
+                return self._create_unauthorized_response("您已被强制下线，请重新登录")
+
             # 设置用户上下文
             await self._set_user_context(payload, request)
 

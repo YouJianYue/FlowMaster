@@ -41,7 +41,7 @@ class AccountLoginHandler(AbstractLoginHandler):
         user = await self._authenticate_user(request.username, request.password)
 
         # 执行认证并生成令牌 - 使用ClientResp而不是ClientEntity
-        login_resp = await AbstractLoginHandler.authenticate(user, client)
+        login_resp = await AbstractLoginHandler.authenticate(user, client, http_request)
 
         return login_resp
 

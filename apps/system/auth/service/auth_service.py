@@ -100,14 +100,30 @@ class AuthService:
         """
         try:
             from apps.system.auth.config.jwt_config import TokenExpiredException, TokenInvalidException
+            from apps.common.util.redis_utils import RedisUtils
+
             # 验证token并获取用户信息
             payload = jwt_utils.verify_token(token)
+
+            # 🔥 删除Redis中的Token信息（在线用户）
+            token_key = f"online_user:{token}"
+            await RedisUtils.delete(token_key)
+
             # 清除用户上下文
             UserContextHolder.clear_context()
-            # TODO: 将token加入黑名单
+
+            # TODO: 将token加入黑名单（可选）
+
             return True
         except (TokenExpiredException, TokenInvalidException):
             # Token过期或无效，依然返回成功（登出操作是幂等的）
+            # 尝试清除Redis中的Token
+            try:
+                from apps.common.util.redis_utils import RedisUtils
+                token_key = f"online_user:{token}"
+                await RedisUtils.delete(token_key)
+            except Exception:
+                pass
             return True
         except Exception:
             return False

@@ -28,6 +28,7 @@ from apps.common.config.logging import setup_logging
 
 setup_logging()  # 立即初始化，接管所有后续日志
 from apps.system.auth.controller.auth_controller import router as auth_router
+from apps.system.auth.controller.online_user_controller import router as online_user_router
 from apps.common.controller import captcha_router, common_router, tenant_router
 from apps.system.core.controller.user_message_controller import (
     router as user_message_router,
@@ -164,6 +165,7 @@ app.add_middleware(
 
 # 注册路由 - 按照参考项目设计
 app.include_router(auth_router)  # 认证路由 /auth
+app.include_router(online_user_router)  # 在线用户路由 /monitor/online
 app.include_router(captcha_router)  # 验证码路由 /common
 app.include_router(dict_item_router)  # 字典项管理路由 /system/dict/item （更长的路径必须先注册）
 app.include_router(dict_router)  # 字典管理路由 /system/dict

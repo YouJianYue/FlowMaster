@@ -88,7 +88,7 @@ class AbstractLoginHandler(ABC):
         # CheckUtils.throwIfEqual(DisEnableStatusEnum.DISABLE, dept.getStatus(), "此账号所属部门已被禁用，如有疑问，请联系管理员");
 
     @staticmethod
-    async def authenticate(user: 'UserEntity', client: 'ClientEntity') -> LoginResp:
+    async def authenticate(user: 'UserEntity', client: 'ClientEntity', http_request: Request = None) -> LoginResp:
         """
         执行认证，生成令牌
 
@@ -97,6 +97,7 @@ class AbstractLoginHandler(ABC):
         Args:
             user: 用户实体
             client: 客户端实体
+            http_request: HTTP请求对象（用于获取IP、浏览器等信息）
 
         Returns:
             LoginResp: 登录响应
@@ -166,6 +167,15 @@ class AbstractLoginHandler(ABC):
 
         access_token = jwt_utils.create_access_token(token_data)
         refresh_token = jwt_utils.create_refresh_token({"user_id": user_context.id})
+
+        # 🔥 保存Token信息到Redis（支持在线用户查询）
+        if http_request:
+            await AbstractLoginHandler._save_token_to_redis(
+                access_token,
+                user_context,
+                client,
+                http_request
+            )
 
         # 构造用户信息响应
         user_info = UserInfoResp(
@@ -251,3 +261,62 @@ class AbstractLoginHandler(ABC):
         """记录登录失败日志"""
         # TODO: 实现登录失败日志记录
         pass
+
+    @staticmethod
+    async def _save_token_to_redis(token: str, user_context: UserContext, client: 'ClientEntity', http_request: Request):
+        """
+        保存Token信息到Redis（支持在线用户查询）
+
+        Args:
+            token: 访问令牌
+            user_context: 用户上下文
+            client: 客户端信息
+            http_request: HTTP请求对象
+        """
+        from apps.common.util.redis_utils import RedisUtils
+        from apps.common.util.network_utils import NetworkUtils
+        from datetime import datetime
+        from user_agents import parse
+
+        try:
+            # 获取客户端IP
+            client_ip = NetworkUtils.get_client_ip(http_request)
+
+            # 获取IP归属地
+            address = NetworkUtils.get_address_from_ip(client_ip) if hasattr(NetworkUtils, 'get_address_from_ip') else "内网IP"
+
+            # 解析User-Agent
+            user_agent_string = NetworkUtils.get_user_agent(http_request)
+            ua = parse(user_agent_string)
+            browser = f"{ua.browser.family} {ua.browser.version_string}"
+            os_info = f"{ua.os.family} {ua.os.version_string}"
+
+            # 构建在线用户数据
+            online_user_data = {
+                "id": user_context.id,
+                "username": user_context.username,
+                "nickname": user_context.nickname,
+                "client_type": client.client_type,
+                "client_id": client.client_id,
+                "ip": client_ip,
+                "address": address,
+                "browser": browser,
+                "os": os_info,
+                "login_time": datetime.now().isoformat(),
+                "last_active_time": datetime.now().isoformat()
+            }
+
+            # 保存到Redis，key格式: online_user:{token}
+            token_key = f"online_user:{token}"
+
+            # 设置过期时间为Token过期时间
+            expire_seconds = jwt_utils.config.access_token_expire_minutes * 60
+
+            await RedisUtils.set(token_key, online_user_data, expire=expire_seconds)
+
+        except Exception as e:
+            # 保存Token失败不应影响登录流程
+            from apps.common.config.logging import get_logger
+            logger = get_logger(__name__)
+            logger.warning(f"保存Token到Redis失败: {e}", exc_info=True)
+

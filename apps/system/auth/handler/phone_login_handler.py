@@ -45,7 +45,7 @@ class PhoneLoginHandler(AbstractLoginHandler):
             client = await self._get_client_entity(client_info)
 
             # 执行认证并生成令牌
-            login_resp = await AbstractLoginHandler.authenticate(user, client)
+            login_resp = await AbstractLoginHandler.authenticate(user, client, http_request)
 
             # 获取当前用户上下文进行后置处理
             from apps.common.context.user_context_holder import UserContextHolder

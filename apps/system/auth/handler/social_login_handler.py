@@ -42,7 +42,7 @@ class SocialLoginHandler(AbstractLoginHandler):
             user_data = await self._find_or_create_user(social_user_info, request.source)
             
             # 执行认证并生成令牌
-            login_resp = await AbstractLoginHandler.authenticate(user_data, client_info)
+            login_resp = await AbstractLoginHandler.authenticate(user_data, client_info, http_request)
             
             # 后置处理
             await AbstractLoginHandler.post_login(self.current_user_context, login_resp, extra_info)
