@@ -6,9 +6,8 @@ WebSocket 管理器
 参考项目的实时消息通知功能
 """
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 from typing import Dict, List
-import json
 
 from apps.common.config.logging.logging_config import get_logger
 
@@ -148,7 +147,9 @@ class WebSocketUtils:
             # 双参数调用 - 指定token发送
             token = token_or_message
             try:
-                asyncio.create_task(websocket_manager.send_personal_message(token, message))
+                asyncio.create_task(
+                    websocket_manager.send_personal_message(token, message)
+                )
                 return True
             except Exception as e:
                 logger.error(f"Failed to send message to token {token[:8]}: {e}")

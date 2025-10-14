@@ -36,7 +36,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
         try:
             payload = jwt_utils.verify_token(token)
             user_id = payload.get("user_id")
-            username = payload.get("username")
 
             if not user_id:
                 await websocket.close(
@@ -56,7 +55,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
             )
             return
-        except Exception as e:
+        except (ValueError, KeyError) as e:
+            # 处理特定的令牌解析异常
             logger.warning(f"WebSocket authentication failed: {e}")
             await websocket.close(
                 code=status.WS_1008_POLICY_VIOLATION, reason="Authentication failed"
@@ -130,7 +130,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
             await websocket.close(
                 code=status.WS_1011_INTERNAL_ERROR, reason="Internal server error"
             )
-        except:
+        except (RuntimeError, WebSocketDisconnect):
+            # WebSocket already closed or disconnected
             pass
 
 

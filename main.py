@@ -46,6 +46,8 @@ from apps.system.core.controller.dict_controller import router as dict_router
 from apps.system.core.controller.dict_item_controller import router as dict_item_router
 from apps.system.core.controller.option_controller import router as option_router
 from apps.system.core.controller.log_controller import router as log_router
+from apps.system.open.controller.app_controller import router as app_router
+from apps.system.tenant.controller.package_controller import router as package_router
 
 # 导入WebSocket路由 (修复循环导入问题后重新启用)
 from apps.common.websocket.websocket_controller import (
@@ -68,6 +70,8 @@ from apps.common.config.exception.auth_exception_handler import (
 # 导入数据库配置
 from apps.common.config.database import close_database, check_db_status
 from apps.common.config.database.models import print_registered_models, validate_models
+from apps.common.config.database.auto_fill_handler import register_auto_fill_listeners
+from apps.common.base.model.entity.base_entity import Base
 
 # 导入日志配置
 from apps.common.config.logging import get_logger
@@ -108,6 +112,10 @@ async def lifespan(_app: FastAPI):
         # 注册数据库模型（确保所有模型被识别）
         print_registered_models()
         validate_models()
+
+        # 🔥 注册数据库自动填充监听器（一比一复刻 MyBatisPlusMetaObjectHandler）
+        register_auto_fill_listeners(Base)
+        logger.info("数据库自动填充监听器已注册")
 
         # 检查数据库状态
         db_status = await check_db_status()
@@ -184,6 +192,8 @@ app.include_router(user_profile_router)  # 个人信息路由
 app.include_router(notice_router)  # 通知公告路由
 app.include_router(file_router)  # 文件管理路由
 app.include_router(log_router)  # 系统日志路由
+app.include_router(app_router)  # 应用管理路由 /open/app
+app.include_router(package_router)  # 租户套餐管理路由 /tenant/package
 
 # 注册WebSocket路由 (修复循环导入问题后重新启用)
 app.include_router(websocket_router)  # WebSocket连接路由
