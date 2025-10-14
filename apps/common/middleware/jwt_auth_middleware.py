@@ -65,8 +65,12 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 # Token无效
                 return self._create_unauthorized_response("无效的访问令牌")
 
-            # 🔥 检查是否已被强退（检查Redis中是否还有在线用户信息）
             from apps.common.util.redis_utils import RedisUtils
+            blacklist_key = f"token_blacklist:{token}"
+            is_blacklisted = await RedisUtils.get(blacklist_key)
+            if is_blacklisted:
+                return self._create_unauthorized_response("令牌已失效，请重新登录")
+
             token_key = f"online_user:{token}"
             online_user_data = await RedisUtils.get(token_key)
             if not online_user_data:
@@ -82,7 +86,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
         except HTTPException as e:
             return self._create_error_response(e.status_code, e.detail)
-        except Exception as e:
+        except Exception:
             return self._create_error_response(500, "内部服务器错误")
         finally:
             # 清理上下文
@@ -185,7 +189,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             current_permissions = await role_service.list_permissions_by_user_id(user_id)
             current_role_codes = await role_service.get_role_codes_by_user_id(user_id)
 
-        except Exception as e:
+        except Exception:
             current_permissions = set(payload.get("permissions", []))
             current_role_codes = set(payload.get("role_codes", []))
 

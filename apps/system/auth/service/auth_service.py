@@ -109,10 +109,11 @@ class AuthService:
             token_key = f"online_user:{token}"
             await RedisUtils.delete(token_key)
 
+            # 🔥 将token加入黑名单，防止token在过期前继续使用
+            await self._add_token_to_blacklist(token, payload)
+
             # 清除用户上下文
             UserContextHolder.clear_context()
-
-            # TODO: 将token加入黑名单（可选）
 
             return True
         except (TokenExpiredException, TokenInvalidException):
@@ -325,8 +326,32 @@ class AuthService:
         """
         if not self.route_builder:
             return []
-        
+
         return await self.route_builder.get_user_permissions(user_id)
+
+    async def _add_token_to_blacklist(self, token: str, payload: Dict[str, Any]):
+        """
+        将token加入黑名单
+
+        Args:
+            token: JWT令牌
+            payload: JWT载荷
+        """
+        try:
+            from apps.common.util.redis_utils import RedisUtils
+            from datetime import datetime
+
+            # 计算token剩余有效期（秒）
+            exp_timestamp = payload.get("exp")
+            if exp_timestamp:
+                remaining_seconds = int(exp_timestamp - datetime.now().timestamp())
+                if remaining_seconds > 0:
+                    # 将token加入黑名单，key格式: token_blacklist:{token}
+                    blacklist_key = f"token_blacklist:{token}"
+                    await RedisUtils.set(blacklist_key, "1", expire=remaining_seconds)
+        except Exception:
+            # 黑名单添加失败不影响登出流程
+            pass
 
 
 # 全局认证服务实例（临时简化处理，后续可改为依赖注入）
