@@ -44,13 +44,32 @@ class PackageServiceImpl(PackageService):
             if conditions:
                 stmt = stmt.where(and_(*conditions))
 
-            # 排序：按sort升序，然后按id升序
-            stmt = stmt.order_by(PackageEntity.sort.asc(), PackageEntity.id.asc())
-
             # 计算总数
             count_stmt = select(func.count()).select_from(stmt.subquery())
             total_result = await session.execute(count_stmt)
             total = total_result.scalar() or 0
+
+            # 处理排序
+            if page_query.sort:
+                for sort_item in page_query.sort:
+                    # 将camelCase字段名转换为snake_case数据库字段名
+                    field_name = sort_item.field
+                    # 简单转换：createTime -> create_time
+                    if field_name == 'createTime':
+                        field_name = 'create_time'
+                    elif field_name == 'updateTime':
+                        field_name = 'update_time'
+
+                    # 获取实体字段
+                    if hasattr(PackageEntity, field_name):
+                        field = getattr(PackageEntity, field_name)
+                        if sort_item.order.lower() == 'desc':
+                            stmt = stmt.order_by(field.desc())
+                        else:
+                            stmt = stmt.order_by(field.asc())
+            else:
+                # 默认排序：按sort升序，然后按id升序
+                stmt = stmt.order_by(PackageEntity.sort.asc(), PackageEntity.id.asc())
 
             # 分页查询
             offset = (page_query.page - 1) * page_query.size

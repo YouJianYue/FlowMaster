@@ -4,22 +4,25 @@
 基础响应模型
 
 一比一复刻参考项目 BaseResp.java
-支持Excel导出配置
+支持Excel导出配置和自动时间序列化
 """
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict, field_serializer
+from pydantic import Field, ConfigDict
 from pydantic.alias_generators import to_camel
+from apps.common.base.model.resp.base_datetime_resp import BaseDatetimeResp
 from apps.common.base.excel.excel_exporter import excel_property
 
 
-class BaseResp(BaseModel):
+class BaseResp(BaseDatetimeResp):
     """
     基础响应模型
 
     一比一复刻参考项目 BaseResp.java
     包含ID、创建人、创建时间、禁用状态等基础字段
+
+    继承 BaseDatetimeResp，自动获得所有 datetime 字段的序列化功能
     """
 
     # Pydantic v2 配置 - 添加驼峰命名转换
@@ -65,10 +68,4 @@ class BaseResp(BaseModel):
         }
     )
 
-    # 时间字段序列化器 - 格式化为 "YYYY-MM-DD HH:MM:SS"
-    @field_serializer('create_time')
-    def serialize_create_time(self, dt: Optional[datetime], _info) -> Optional[str]:
-        """序列化创建时间为标准格式"""
-        if dt is None:
-            return None
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    # 时间序列化由 BaseDatetimeResp 自动处理，无需手动定义 @field_serializer

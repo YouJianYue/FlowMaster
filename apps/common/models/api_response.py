@@ -76,7 +76,6 @@ class ApiResponse(BaseModel, Generic[T]):
     )
 
 
-# ✅ 正确方式：在视图函数中调用工厂函数，不要作为模型字段默认值
 def create_success_response(data: T = None, message: str = "ok", code: str = "0") -> ApiResponse[T]:
     """创建成功响应 - 在视图函数中使用（匹配参考项目格式）"""
     return ApiResponse(

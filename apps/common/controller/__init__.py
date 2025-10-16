@@ -7,9 +7,11 @@
 from .captcha_controller import router as captcha_router
 from .common_controller import router as common_router
 from .tenant_controller import router as tenant_router
+from .health_controller import router as health_router
 
 __all__ = [
     "captcha_router",
     "common_router",
-    "tenant_router"
+    "tenant_router",
+    "health_router",
 ]

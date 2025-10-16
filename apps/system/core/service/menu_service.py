@@ -206,6 +206,26 @@ class MenuService(ABC):
         """
         pass
 
+    @abstractmethod
+    async def list_tree_for_tenant(
+        self,
+        exclude_menu_ids: List[int] = None,
+        is_simple: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        查询租户套餐菜单树（用于套餐管理新增/编辑页面）
+
+        对应参考项目: MenuApi.listTree(excludeMenuIds, isSimple)
+
+        Args:
+            exclude_menu_ids: 排除的菜单ID列表（租户不能使用的菜单）
+            is_simple: 是否简单模式（简单模式只返回基本字段）
+
+        Returns:
+            List[Dict[str, Any]]: 菜单树列表
+        """
+        pass
+
 
 # 依赖注入函数
 def get_menu_service() -> MenuService:

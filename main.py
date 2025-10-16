@@ -4,266 +4,33 @@
 FlowMaster 应用主入口
 """
 
-import warnings
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import logging
 
-# 🔥 全局抑制 bcrypt 版本警告
-warnings.filterwarnings("ignore", message=".*bcrypt.*", category=Warning)
-warnings.filterwarnings("ignore", message=".*trapped.*error reading bcrypt version.*")
-
-# 🔥 首先加载环境变量 (必须在其他导入之前)
+# 首先加载环境变量（必须在其他导入之前）
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# 🔥 首先配置 watchfiles 日志级别（必须在 uvicorn 启动前）
-import logging
-logging.getLogger('watchfiles').setLevel(logging.WARNING)
-logging.getLogger('watchfiles.main').setLevel(logging.WARNING)
+# 首先配置 watchfiles 日志级别（必须在 uvicorn 启动前）
+logging.getLogger("watchfiles").setLevel(logging.WARNING)
+logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
 
-# 🔥 在 FastAPI 应用创建之前就初始化日志系统
+# 在 FastAPI 应用创建之前就初始化日志系统
 from apps.common.config.logging import setup_logging
 
 setup_logging()  # 立即初始化，接管所有后续日志
-from apps.system.auth.controller.auth_controller import router as auth_router
-from apps.system.auth.controller.online_user_controller import router as online_user_router
-from apps.common.controller import captcha_router, common_router, tenant_router
-from apps.system.core.controller.user_message_controller import (
-    router as user_message_router,
-)
-from apps.system.core.controller.file_controller import router as file_router
-from apps.system.core.controller.dashboard_controller import router as dashboard_router
-from apps.system.core.controller.dept_controller import router as dept_router
-from apps.system.core.controller.user_controller import router as user_router
-from apps.system.core.controller.menu_controller import router as menu_router
-from apps.system.core.controller.role_controller import router as role_router
-from apps.system.core.controller.common_controller import router as system_common_router
-from apps.system.core.controller.user_profile_controller import router as user_profile_router
-from apps.system.core.controller.notice_controller import router as notice_router
-from apps.system.core.controller.dict_controller import router as dict_router
-from apps.system.core.controller.dict_item_controller import router as dict_item_router
-from apps.system.core.controller.option_controller import router as option_router
-from apps.system.core.controller.log_controller import router as log_router
-from apps.system.open.controller.app_controller import router as app_router
-from apps.system.tenant.controller.package_controller import router as package_router
 
-# 导入WebSocket路由 (修复循环导入问题后重新启用)
-from apps.common.websocket.websocket_controller import (
-    websocket_router,
-    api_router as websocket_api_router,
-)
-
-# 导入中间件
-from apps.common.middleware.jwt_auth_middleware import JWTAuthMiddleware
-from apps.common.middleware.log_interceptor_middleware import LogInterceptorMiddleware
-
-# 导入异常处理器
-from apps.common.config.exception.global_exception_handler import (
-    register_exception_handlers,
-)
-from apps.common.config.exception.auth_exception_handler import (
-    register_auth_exception_handlers,
-)
-
-# 导入数据库配置
-from apps.common.config.database import close_database, check_db_status
-from apps.common.config.database.models import print_registered_models, validate_models
-from apps.common.config.database.auto_fill_handler import register_auto_fill_listeners
-from apps.common.base.model.entity.base_entity import Base
-
-# 导入日志配置
-from apps.common.config.logging import get_logger
-
-# 导入应用配置
+# 导入应用工厂和配置
+from apps.common.config.app_factory import create_app
 from apps.common.config.app_config import app_config
-
-# 导入RSA配置
-from apps.common.config.rsa_properties import RsaProperties
-
-
-# 导入uvicorn（用于直接运行）
 import uvicorn
 
-
-# 应用启动和关闭事件处理
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    """应用生命周期管理"""
-    # 启动时执行
-    logger = get_logger("main")
-
-    try:
-        logger.info("FlowMaster 应用启动中...")
-
-        # 0. 验证环境变量加载
-        logger.info("验证环境变量加载...")
-
-        if not RsaProperties.PRIVATE_KEY or not RsaProperties.PUBLIC_KEY:
-            logger.warning("RSA密钥未配置或加载失败！登录功能可能无法正常工作")
-
-        # 1. 日志系统已在模块导入时初始化
-        logger.info("日志系统已就绪")
-
-        # 2. 初始化数据库
-        logger.info("初始化数据库...")
-
-        # 注册数据库模型（确保所有模型被识别）
-        print_registered_models()
-        validate_models()
-
-        # 🔥 注册数据库自动填充监听器（一比一复刻 MyBatisPlusMetaObjectHandler）
-        register_auto_fill_listeners(Base)
-        logger.info("数据库自动填充监听器已注册")
-
-        # 检查数据库状态
-        db_status = await check_db_status()
-        logger.info(f"数据库状态: {db_status}")
-
-        logger.info("FlowMaster 应用启动成功!")
-
-        # 应用运行期间
-        yield
-
-    except Exception as e:
-        logger.error(f"应用启动失败: {e}")
-        raise
-    finally:
-        # 关闭时执行
-        logger.info("FlowMaster 应用关闭中...")
-
-        # 关闭数据库连接
-        await close_database()
-
-        logger.info("FlowMaster 应用已关闭")
-
-
-# 创建 FastAPI 应用
-app = FastAPI(
-    title="FlowMaster API",
-    description="FlowMaster 系统管理平台",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan,  # 添加生命周期管理
-)
-
-# 注册异常处理器
-register_exception_handlers(app)
-register_auth_exception_handlers(app)
-
-# 配置 CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=app_config.cors_origins_list,
-    allow_credentials=app_config.cors_allow_credentials,
-    allow_methods=app_config.cors_methods_list,
-    allow_headers=app_config.cors_headers_list,
-)
-
-# 添加 JWT 认证中间件
-app.add_middleware(
-    JWTAuthMiddleware,
-    exclude_paths=app_config.jwt_exclude_paths_list,
-)
-
-# 🔥 注释掉日志拦截中间件，使用 @Log 装饰器替代（一比一复刻参考项目AOP方式）
-# app.add_middleware(LogInterceptorMiddleware)
-
-# 注册路由 - 按照参考项目设计
-app.include_router(auth_router)  # 认证路由 /auth
-app.include_router(online_user_router)  # 在线用户路由 /monitor/online
-app.include_router(captcha_router)  # 验证码路由 /common
-app.include_router(dict_item_router)  # 字典项管理路由 /system/dict/item （更长的路径必须先注册）
-app.include_router(dict_router)  # 字典管理路由 /system/dict
-app.include_router(option_router)  # 系统配置参数管理路由 /system/option
-app.include_router(common_router)  # 公共路由 /system/common (包含字典查询)
-app.include_router(system_common_router)  # 系统通用路由 /system/common
-app.include_router(tenant_router)  # 租户管理路由
-app.include_router(user_message_router)  # 用户消息路由
-app.include_router(dashboard_router)  # 仪表盘路由
-app.include_router(dept_router)  # 部门管理路由
-app.include_router(user_router)  # 用户管理路由
-app.include_router(menu_router)  # 菜单管理路由
-app.include_router(role_router)  # 角色管理路由
-app.include_router(system_common_router)  # 系统通用路由
-app.include_router(user_profile_router)  # 个人信息路由
-app.include_router(notice_router)  # 通知公告路由
-app.include_router(file_router)  # 文件管理路由
-app.include_router(log_router)  # 系统日志路由
-app.include_router(app_router)  # 应用管理路由 /open/app
-app.include_router(package_router)  # 租户套餐管理路由 /tenant/package
-
-# 注册WebSocket路由 (修复循环导入问题后重新启用)
-app.include_router(websocket_router)  # WebSocket连接路由
-app.include_router(websocket_api_router)  # WebSocket API路由
-
-
-# 健康检查（增强版）
-@app.get("/health", summary="健康检查")
-async def health_check():
-    """增强版健康检查，包含数据库状态"""
-    try:
-        # 检查数据库连接
-        db_status = await check_db_status()
-
-        return {
-            "status": "ok",
-            "message": "FlowMaster is running",
-            "database": {
-                "connection": db_status.get("connection", False),
-                "type": db_status.get("database_type", "unknown"),
-                "tables": db_status.get("tables_count", 0),
-            },
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Health check failed: {str(e)}",
-            "database": {"connection": False, "error": str(e)},
-        }
-
-
-# 数据库状态检查接口
-@app.get("/db/status", summary="数据库状态")
-async def database_status():
-    """详细的数据库状态检查"""
-    return await check_db_status()
-
-
-# 根路径
-@app.get("/", summary="根路径")
-async def root():
-    return {"message": "Welcome to FlowMaster API"}
-
-
-# 🔥 临时添加一个测试异常的接口，用于调试异常处理
-@app.get("/test/exception", summary="测试异常处理")
-async def test_exception():
-    """测试全局异常处理器是否正常工作"""
-    raise Exception("这是一个测试异常，用于验证异常处理是否正常工作")
-
-
-# 🔥 临时添加一个测试POST接口，用于调试POST请求
-@app.post("/test/post", summary="测试POST请求")
-async def test_post(data: dict):
-    """测试POST请求是否正常工作"""
-    return {"message": "POST请求成功", "received": data}
-
-
-# 🔥 测试日志记录功能的接口
-from apps.common.decorators.log_decorator import Log
-
-@app.post("/test/log", summary="测试日志记录")
-@Log(module="测试模块", description="测试日志记录功能")
-async def test_log(data: dict):
-    """测试日志记录是否正常工作"""
-    return {"message": "日志记录测试成功", "received": data}
+# 创建应用
+app = create_app()
 
 
 if __name__ == "__main__":
-    # 自定义日志配置,抑制 watchfiles DEBUG 日志
+    # 自定义日志配置，抑制 watchfiles DEBUG 日志
     log_config = uvicorn.config.LOGGING_CONFIG.copy()
     log_config["loggers"]["watchfiles"] = {
         "level": "WARNING",
@@ -282,7 +49,6 @@ if __name__ == "__main__":
         port=app_config.app_port,
         reload=app_config.app_reload,
         log_level="info",
-        log_config=log_config,  # 使用自定义日志配置
-        # 启用访问日志以便看到错误信息
+        log_config=log_config,
         access_log=True,
     )

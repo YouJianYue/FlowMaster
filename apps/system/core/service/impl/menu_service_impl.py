@@ -13,12 +13,45 @@ from apps.system.core.model.entity.menu_entity import MenuEntity
 from apps.system.core.model.req.menu_req import MenuReq
 from apps.system.core.model.resp.menu_resp import MenuResp
 from apps.common.config.logging.logging_config import get_logger
+from apps.common.enums.dis_enable_status_enum import DisEnableStatusEnum
 
 logger = get_logger(__name__)
 
 
 class MenuServiceImpl(MenuService):
     """菜单服务实现（数据库驱动）"""
+
+    @staticmethod
+    def _entity_to_dict(menu: MenuEntity) -> Dict[str, Any]:
+        """
+        将菜单实体转换为字典（内部使用）
+
+        Args:
+            menu: 菜单实体
+
+        Returns:
+            Dict[str, Any]: 菜单字典
+        """
+        return {
+            "id": menu.id,
+            "title": menu.title,
+            "parent_id": menu.parent_id,
+            "type": menu.type,
+            "path": menu.path,
+            "name": menu.name,
+            "component": menu.component,
+            "redirect": menu.redirect,
+            "icon": menu.icon,
+            "is_external": menu.is_external,
+            "is_cache": menu.is_cache,
+            "is_hidden": menu.is_hidden,
+            "permission": menu.permission,
+            "sort": menu.sort,
+            "status": menu.status,
+            "create_user": menu.create_user,
+            "create_time": menu.create_time,
+            "update_time": menu.update_time,
+        }
 
     async def get_menu_tree(self, only_enabled: bool = True) -> List[Dict[str, Any]]:
         """
@@ -35,40 +68,14 @@ class MenuServiceImpl(MenuService):
             query = select(MenuEntity).order_by(MenuEntity.sort, MenuEntity.id)
 
             if only_enabled:
-                query = query.where(MenuEntity.status == 1)
+                query = query.where(MenuEntity.status == DisEnableStatusEnum.ENABLE.value)
 
             # 执行查询
             result = await session.execute(query)
             menus = result.scalars().all()
 
-            # 转换为字典格式
-            menu_list = []
-            for menu in menus:
-                menu_dict = {
-                    "id": menu.id,
-                    "title": menu.title,
-                    "parent_id": menu.parent_id,
-                    "type": menu.type,  # 保持整数类型
-                    "path": menu.path,
-                    "name": menu.name,
-                    "component": menu.component,
-                    "redirect": menu.redirect,
-                    "icon": menu.icon,
-                    "is_external": menu.is_external,
-                    "is_cache": menu.is_cache,
-                    "is_hidden": menu.is_hidden,
-                    "permission": menu.permission,
-                    "sort": menu.sort,
-                    "status": menu.status,  # 保持整数类型
-                    "create_user": menu.create_user,
-                    "create_time": menu.create_time.strftime("%Y-%m-%d %H:%M:%S")
-                    if menu.create_time
-                    else None,  # 简单时间格式
-                    "update_time": menu.update_time.strftime("%Y-%m-%d %H:%M:%S")
-                    if menu.update_time
-                    else None,  # 简单时间格式
-                }
-                menu_list.append(menu_dict)
+            # 转换为字典格式（使用公共方法）
+            menu_list = [self._entity_to_dict(menu) for menu in menus]
 
             # 构建树结构
             return self._build_tree(menu_list)
@@ -111,11 +118,14 @@ class MenuServiceImpl(MenuService):
 
         for menu in menu_list:
             if menu["parent_id"] == parent_id:
+                # 🔥 关键修复：创建菜单的副本，避免污染原始数据
+                menu_copy = menu.copy()
+
                 # 递归构建子菜单
                 children = self._build_tree(menu_list, menu["id"])
                 if children:
-                    menu["children"] = children
-                tree.append(menu)
+                    menu_copy["children"] = children
+                tree.append(menu_copy)
 
         # 按sort排序
         tree.sort(key=lambda x: x.get("sort", 999))
@@ -160,46 +170,34 @@ class MenuServiceImpl(MenuService):
         """
         转换为前端期望的格式（camelCase字段名）
 
+        使用 Pydantic 模型自动转换，无需手动映射字段
+
         Args:
             menu_tree: 菜单树数据
 
         Returns:
             List[Dict[str, Any]]: 前端格式的菜单树
         """
+        from apps.system.core.model.resp.menu_resp import MenuResp
+
         result = []
 
         for menu in menu_tree:
-            # 转换字段名为camelCase（匹配参考项目接口格式）
-            frontend_menu = {
-                "id": menu.get("id"),
-                "parentId": menu.get("parent_id"),
-                "title": menu.get("title"),
-                "sort": menu.get("sort"),
-                "type": menu.get("type"),  # 保持整数类型
-                "path": menu.get("path"),
-                "name": menu.get("name"),
-                "component": menu.get("component"),
-                "redirect": menu.get("redirect"),
-                "icon": menu.get("icon"),
-                "isExternal": menu.get("is_external"),
-                "isCache": menu.get("is_cache"),
-                "isHidden": menu.get("is_hidden"),
-                "permission": menu.get("permission"),
-                "status": menu.get("status"),  # 保持整数类型
-                "createUser": menu.get("create_user"),
-                "createUserString": "超级管理员",  # 简化实现
-                "createTime": menu.get("create_time"),  # 已经是正确格式
-                "disabled": None,  # 添加缺失的disabled字段
-            }
+            # 🔥 关键修复：创建菜单副本，避免污染原始数据
+            menu_copy = menu.copy()
 
-            # 处理子菜单
-            if "children" in menu:
-                frontend_menu["children"] = self.convert_to_frontend_format(
-                    menu["children"]
-                )
+            # 处理子菜单（递归）
+            if "children" in menu_copy and menu_copy["children"]:
+                menu_copy["children"] = self.convert_to_frontend_format(menu_copy["children"])
+            else:
+                # 移除空的 children 字段
+                menu_copy.pop("children", None)
 
-            # 移除None值
-            frontend_menu = {k: v for k, v in frontend_menu.items() if v is not None}
+            # 使用 Pydantic 模型进行验证和转换
+            # 1. model_validate: 从字典创建模型实例
+            # 2. model_dump(by_alias=True, exclude_none=True): 导出为驼峰命名，排除 None 值
+            menu_resp = MenuResp.model_validate(menu_copy)
+            frontend_menu = menu_resp.model_dump(by_alias=True, exclude_none=True)
 
             result.append(frontend_menu)
 
@@ -216,7 +214,6 @@ class MenuServiceImpl(MenuService):
             MenuResp: 创建的菜单数据
         """
         from apps.common.context.user_context_holder import UserContextHolder
-        from apps.common.exceptions.business_exception import BusinessException
         from apps.system.core.enums.menu_type_enum import MenuTypeEnum
 
         async with DatabaseSession.get_session_context() as session:
@@ -229,7 +226,7 @@ class MenuServiceImpl(MenuService):
 
             # 目录类型菜单，默认为 Layout（一比一复刻参考项目 MenuServiceImpl.create()）
             component = menu_req.component
-            if menu_req.type == MenuTypeEnum.DIR:
+            if menu_req.type == MenuTypeEnum.DIRECTORY:
                 component = component if component else "Layout"
 
             # 获取当前用户ID
@@ -270,7 +267,7 @@ class MenuServiceImpl(MenuService):
             await self.clear_cache()
 
             # 转换为响应模型
-            return self._entity_to_resp(menu_entity)
+            return await self._entity_to_resp(menu_entity)
 
     async def update_menu(self, menu_id: int, menu_req: 'MenuReq') -> 'MenuResp':
         """
@@ -284,7 +281,7 @@ class MenuServiceImpl(MenuService):
             MenuResp: 更新的菜单数据
         """
         from apps.common.context.user_context_holder import UserContextHolder
-        from apps.common.exceptions.business_exception import BusinessException
+        from apps.common.config.exception.global_exception_handler import BusinessException
         from apps.system.core.enums.menu_type_enum import MenuTypeEnum
 
         async with DatabaseSession.get_session_context() as session:
@@ -341,7 +338,7 @@ class MenuServiceImpl(MenuService):
             await self.clear_cache()
 
             # 转换为响应模型
-            return self._entity_to_resp(menu_entity)
+            return await self._entity_to_resp(menu_entity)
 
     async def update_menu_status(self, menu_id: int, status: int) -> None:
         """
@@ -351,15 +348,22 @@ class MenuServiceImpl(MenuService):
             menu_id: 菜单ID
             status: 状态值（1=启用，2=禁用）
         """
+        from apps.common.context.user_context_holder import UserContextHolder
+
         async with DatabaseSession.get_session_context() as session:
             # 查询菜单
             menu_entity = await session.get(MenuEntity, menu_id)
             if not menu_entity:
                 raise ValueError(f"菜单不存在: {menu_id}")
 
+            # 获取当前用户ID
+            current_user_id = UserContextHolder.get_user_id()
+            if not current_user_id:
+                current_user_id = 1  # 如果未登录，默认为系统管理员
+
             # 更新状态
             menu_entity.status = status
-            menu_entity.update_user = 1  # TODO: 从上下文获取
+            menu_entity.update_user = current_user_id
             menu_entity.update_time = datetime.now()
 
             # 保存更改
@@ -423,7 +427,8 @@ class MenuServiceImpl(MenuService):
             # 不抛出异常，避免影响主流程
             pass
 
-    def _entity_to_resp(self, entity: MenuEntity) -> 'MenuResp':
+    @staticmethod
+    async def _entity_to_resp(entity: MenuEntity) -> 'MenuResp':
         """
         将菜单实体转换为响应模型
 
@@ -434,11 +439,21 @@ class MenuServiceImpl(MenuService):
             MenuResp: 菜单响应模型
         """
         from apps.system.core.model.resp.menu_resp import MenuResp
+        from apps.system.core.model.entity.user_entity import UserEntity
+
+        # 查询创建用户的昵称
+        create_user_string = "未知用户"
+        if entity.create_user:
+            async with DatabaseSession.get_session_context() as session:
+                user = await session.get(UserEntity, entity.create_user)
+                if user:
+                    create_user_string = user.nickname or user.username
+
         return MenuResp(
             id=entity.id,
             title=entity.title,
             parent_id=entity.parent_id if entity.parent_id != 0 else None,
-            type=entity.type,
+            type=entity.type,  # Pydantic 会自动将 int 转换为 MenuTypeEnum
             path=entity.path,
             name=entity.name,
             component=entity.component,
@@ -449,13 +464,11 @@ class MenuServiceImpl(MenuService):
             is_hidden=entity.is_hidden,
             permission=entity.permission,
             sort=entity.sort,
-            status=entity.status,
-            create_user=entity.create_user,
-            create_user_string="超级管理员",  # TODO: 从用户表关联查询
-            create_time=entity.create_time.strftime("%Y-%m-%d %H:%M:%S")
-            if entity.create_time
-            else None,
-            disabled=False,  # TODO: 根据业务逻辑判断
+            status=entity.status,  # Pydantic 会自动将 int 转换为 DisEnableStatusEnum
+            create_user=entity.create_user,  # 创建人ID
+            create_user_string=create_user_string,  # 创建人姓名
+            create_time=entity.create_time,  # 直接传递 datetime 对象，Pydantic 会自动序列化
+            disabled=False,  # 所有菜单默认不禁用编辑
         )
 
     def _convert_to_dict_tree(
@@ -496,29 +509,8 @@ class MenuServiceImpl(MenuService):
             result = await session.execute(stmt)
             menu_entities = result.scalars().all()
 
-            menu_list = []
-            for menu in menu_entities:
-                menu_dict = {
-                    "id": menu.id,
-                    "title": menu.title,
-                    "parent_id": menu.parent_id,
-                    "type": menu.type,
-                    "path": menu.path,
-                    "name": menu.name,
-                    "component": menu.component,
-                    "redirect": menu.redirect,
-                    "icon": menu.icon,
-                    "is_external": menu.is_external,
-                    "is_cache": menu.is_cache,
-                    "is_hidden": menu.is_hidden,
-                    "permission": menu.permission,
-                    "sort": menu.sort,
-                    "status": menu.status,
-                    "create_user": menu.create_user
-                }
-                menu_list.append(menu_dict)
-
-            return menu_list
+            # 使用公共方法转换为字典
+            return [self._entity_to_dict(menu) for menu in menu_entities]
 
     async def list_permission_by_user_id(self, user_id: int) -> set[str]:
         """
@@ -536,7 +528,7 @@ class MenuServiceImpl(MenuService):
                 # 超级管理员拥有所有权限
                 stmt = select(MenuEntity.permission).where(
                     MenuEntity.permission.is_not(None),
-                    MenuEntity.status == 1
+                    MenuEntity.status == DisEnableStatusEnum.ENABLE.value  # 使用.value比较int类型
                 )
                 result = await session.execute(stmt)
                 permissions = {row[0] for row in result.fetchall() if row[0]}
@@ -579,7 +571,8 @@ class MenuServiceImpl(MenuService):
             menu_ids = set()  # 使用set去重，对应参考项目的LinkedHashSet
 
             if SystemConstants.SUPER_ADMIN_ROLE_ID in role_ids:
-                all_menus_stmt = select(MenuEntity.id).where(MenuEntity.status == 1)
+                # 🔥 修复：使用 .value 来比较，因为数据库返回的是int类型
+                all_menus_stmt = select(MenuEntity.id).where(MenuEntity.status == DisEnableStatusEnum.ENABLE.value)
                 all_menus_result = await session.execute(all_menus_stmt)
                 all_menu_ids = [row[0] for row in all_menus_result.fetchall()]
                 menu_ids.update(all_menu_ids)
@@ -591,41 +584,20 @@ class MenuServiceImpl(MenuService):
                     role_menu_ids = [row[0] for row in role_menus_result.fetchall()]
                     menu_ids.update(role_menu_ids)
 
-
             if not menu_ids:
                 return []
 
             # 查询这些菜单的详细信息（只查询启用的菜单）
             stmt = select(MenuEntity).where(
                 MenuEntity.id.in_(menu_ids),
-                MenuEntity.status == 1  # 只查询启用的菜单
+                MenuEntity.status == DisEnableStatusEnum.ENABLE.value  # 使用.value比较int类型
             ).order_by(MenuEntity.sort)
 
             result = await session.execute(stmt)
             menu_entities = result.scalars().all()
 
-            menu_list = []
-            for menu in menu_entities:
-                menu_dict = {
-                    "id": menu.id,
-                    "title": menu.title,
-                    "parent_id": menu.parent_id,
-                    "type": menu.type,
-                    "path": menu.path,
-                    "name": menu.name,
-                    "component": menu.component,
-                    "redirect": menu.redirect,
-                    "icon": menu.icon,
-                    "is_external": menu.is_external,
-                    "is_cache": menu.is_cache,
-                    "is_hidden": menu.is_hidden,
-                    "permission": menu.permission,
-                    "sort": menu.sort,
-                    "status": menu.status,
-                    "create_user": menu.create_user
-                }
-                menu_list.append(menu_dict)
-            return menu_list
+            # 使用公共方法转换为字典
+            return [self._entity_to_dict(menu) for menu in menu_entities]
 
     async def get_user_route_tree(self, user_id: int) -> List[Dict[str, Any]]:
         """
@@ -649,7 +621,8 @@ class MenuServiceImpl(MenuService):
 
         for menu in user_menus:
             # 检查过滤条件：只过滤启用状态和非按钮类型
-            status_ok = menu.get("status") == 1
+            # status字段是int类型，需要用.value比较
+            status_ok = menu.get("status") == DisEnableStatusEnum.ENABLE.value
             type_ok = menu.get("type") in [1, 2]  # 只保留目录(1)和菜单(2)，过滤按钮(3)
 
             if status_ok and type_ok:
@@ -728,7 +701,8 @@ class MenuServiceImpl(MenuService):
 
         return routes
 
-    def _build_menu_tree(self, menus: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _build_menu_tree(menus: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         构建菜单树结构
 
@@ -761,11 +735,11 @@ class MenuServiceImpl(MenuService):
                 node_map[parent_id]["children"].append(node_map[menu["id"]])
 
         # 按排序号排序
-        def sort_tree(nodes):
-            nodes.sort(key=lambda x: x.get("sort", 999))
-            for node in nodes:
-                if node["children"]:
-                    sort_tree(node["children"])
+        def sort_tree(tree_nodes):
+            tree_nodes.sort(key=lambda x: x.get("sort", 999))
+            for tree_node in tree_nodes:
+                if tree_node["children"]:
+                    sort_tree(tree_node["children"])
 
         sort_tree(root_nodes)
         return root_nodes
@@ -817,7 +791,116 @@ class MenuServiceImpl(MenuService):
 
         return build_tree(all_menus)
 
-    async def _check_title_repeat(self, session, title: str, parent_id: int, menu_id: int = None) -> None:
+    async def list_tree_for_tenant(
+        self,
+        exclude_menu_ids: List[int] = None,
+        is_simple: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        查询租户套餐菜单树（用于套餐管理新增/编辑页面）
+
+        对应参考项目: MenuApiImpl.listTree(excludeMenuIds, isSimple)
+
+        Args:
+            exclude_menu_ids: 排除的菜单ID列表（租户不能使用的菜单）
+            is_simple: 是否简单模式（简单模式只返回基本字段）
+
+        Returns:
+            List[Dict[str, Any]]: 菜单树列表
+        """
+        async with DatabaseSession.get_session_context() as session:
+            # 构建查询：只查询启用的菜单
+            query = select(MenuEntity).where(
+                MenuEntity.status == DisEnableStatusEnum.ENABLE.value  # 使用.value比较int类型
+            ).order_by(MenuEntity.sort, MenuEntity.id)
+
+            # 如果有排除的菜单ID，添加过滤条件
+            if exclude_menu_ids and len(exclude_menu_ids) > 0:
+                query = query.where(MenuEntity.id.notin_(exclude_menu_ids))
+
+            # 执行查询
+            result = await session.execute(query)
+            menus = result.scalars().all()
+
+            # 转换为字典格式
+            menu_list = []
+            for menu in menus:
+                if is_simple:
+                    # 简单模式：返回Tree格式需要的字段
+                    # Hutool Tree序列化后包含：id, name, weight, parentId, children
+                    # 前端TreeSelect组件需要：key(用于显示), value(用于提交), title(显示文本)
+                    menu_dict = {
+                        "id": menu.id,  # Hutool Tree的标准字段
+                        "key": menu.id,  # 前端TreeSelect显示需要
+                        "value": menu.id,  # 前端TreeSelect提交值需要
+                        "title": menu.title,  # 显示文本
+                        "parentId": menu.parent_id if menu.parent_id != 0 else 0,
+                        "weight": menu.sort,  # Hutool Tree的排序字段
+                    }
+                else:
+                    # 完整模式：返回所有字段
+                    menu_dict = {
+                        "id": menu.id,
+                        "key": menu.id,
+                        "value": menu.id,
+                        "title": menu.title,
+                        "parentId": menu.parent_id if menu.parent_id != 0 else 0,
+                        "weight": menu.sort,
+                        "type": menu.type,
+                        "path": menu.path,
+                        "name": menu.name,
+                        "component": menu.component,
+                        "redirect": menu.redirect,
+                        "icon": menu.icon,
+                        "isExternal": menu.is_external,
+                        "isCache": menu.is_cache,
+                        "isHidden": menu.is_hidden,
+                        "permission": menu.permission,
+                        "sort": menu.sort,
+                        "status": menu.status,
+                    }
+                menu_list.append(menu_dict)
+
+            # 构建树结构（从根节点开始，parentId=0）
+            return self._build_simple_tree(menu_list, 0)
+
+    def _build_simple_tree(
+        self, menu_list: List[Dict[str, Any]], parent_id: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        构建简单树结构（用于租户套餐菜单树）
+
+        Args:
+            menu_list: 菜单数据列表
+            parent_id: 父级ID（0表示根节点）
+
+        Returns:
+            List[Dict[str, Any]]: 树结构菜单数据
+        """
+        tree = []
+
+        for menu in menu_list:
+            # 匹配父节点
+            menu_parent_id = menu.get("parentId")
+            if menu_parent_id == parent_id:
+                # 🔥 关键修复：创建菜单副本，避免污染原始数据
+                menu_copy = menu.copy()
+
+                # 递归构建子菜单
+                children = self._build_simple_tree(menu_list, menu["id"])
+                if children:
+                    menu_copy["children"] = children
+
+                tree.append(menu_copy)
+
+        # 按sort排序（如果有sort字段）
+        if tree and "sort" in tree[0]:
+            tree.sort(key=lambda x: x.get("sort", 999))
+
+        return tree
+
+    @staticmethod
+    async def _check_title_repeat(session, title: str, parent_id: int, menu_id: int = None) -> None:
         """
         检查标题是否重复（一比一复刻参考项目 MenuServiceImpl.checkTitleRepeat()）
 
@@ -830,7 +913,7 @@ class MenuServiceImpl(MenuService):
         Raises:
             BusinessException: 标题重复时抛出
         """
-        from apps.common.exceptions.business_exception import BusinessException
+        from apps.common.config.exception.global_exception_handler import BusinessException
 
         # 构建查询条件：同一父菜单下，标题相同的菜单
         query = select(func.count(MenuEntity.id)).where(
@@ -848,7 +931,8 @@ class MenuServiceImpl(MenuService):
         if count > 0:
             raise BusinessException(f"标题为 [{title}] 的菜单已存在")
 
-    async def _check_name_repeat(self, session, name: str, menu_id: int = None) -> None:
+    @staticmethod
+    async def _check_name_repeat(session, name: str, menu_id: int = None) -> None:
         """
         检查组件名称是否重复（一比一复刻参考项目 MenuServiceImpl.checkNameRepeat()）
 
@@ -860,7 +944,7 @@ class MenuServiceImpl(MenuService):
         Raises:
             BusinessException: 组件名称重复时抛出
         """
-        from apps.common.exceptions.business_exception import BusinessException
+        from apps.common.config.exception.global_exception_handler import BusinessException
         from apps.system.core.enums.menu_type_enum import MenuTypeEnum
 
         if not name:

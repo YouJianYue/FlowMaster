@@ -254,7 +254,9 @@ class AuthService:
 
     async def build_user_route_tree(self, user_id: int) -> List[Dict[str, Any]]:
         """
-        构建用户路由树（完全对应参考项目的buildRouteTree方法）
+        构建用户路由树 - 一比一复刻参考项目的buildRouteTree方法
+
+        对应参考项目: AuthServiceImpl.buildRouteTree(Long userId)
 
         Args:
             user_id: 用户ID
@@ -262,57 +264,41 @@ class AuthService:
         Returns:
             List[Dict[str, Any]]: 用户路由树
         """
-        # 使用菜单服务构建用户路由树
-        if self.menu_service:
-            route_tree = await self.menu_service.get_user_route_tree(user_id)
+        if not self.menu_service:
+            return []
 
-            # 转换为前端路由格式
-            converted_routes = self.menu_service.convert_to_route_format(route_tree)
+        try:
+            # 🔥 一比一复刻参考项目AuthServiceImpl.buildRouteTree()
+            # 1. 查询用户的菜单列表（已经根据角色过滤）
+            user_menus = await self.menu_service.list_by_user_id(user_id)
 
-            return converted_routes
+            if not user_menus:
+                return []
 
-        # 如果没有菜单服务，返回默认路由树
-        return [
-            {
-                "path": "/system",
-                "name": "System",
-                "component": "Layout",
-                "redirect": "/system/user",
-                "meta": {
-                    "title": "系统管理",
-                    "icon": "settings"
-                },
-                "children": [
-                    {
-                        "path": "/system/user",
-                        "name": "SystemUser",
-                        "component": "system/user/index",
-                        "meta": {
-                            "title": "用户管理",
-                            "icon": "user"
-                        }
-                    },
-                    {
-                        "path": "/system/role",
-                        "name": "SystemRole",
-                        "component": "system/role/index",
-                        "meta": {
-                            "title": "角色管理",
-                            "icon": "user-management"
-                        }
-                    },
-                    {
-                        "path": "/system/menu",
-                        "name": "SystemMenu",
-                        "component": "system/menu/index",
-                        "meta": {
-                            "title": "菜单管理",
-                            "icon": "menu"
-                        }
-                    }
-                ]
-            }
-        ]
+            # 2. 只过滤按钮类型，不过滤隐藏菜单！
+            # 参考项目: List<MenuResp> menuList = menuSet.stream().filter(m -> !MenuTypeEnum.BUTTON.equals(m.getType())).toList();
+            filtered_menus = []
+            for menu in user_menus:
+                # 只保留目录(1)和菜单(2)，过滤按钮(3)
+                if menu.get("type") in [1, 2]:
+                    filtered_menus.append(menu)
+
+            if not filtered_menus:
+                return []
+
+            # 3. 构建树结构
+            route_tree = self.menu_service._build_menu_tree(filtered_menus)
+
+            # 4. 转换为前端路由格式
+            routes = self.menu_service.convert_to_route_format(route_tree)
+
+            return routes
+
+        except Exception as e:
+            from apps.common.config.logging import get_logger
+            logger = get_logger(__name__)
+            logger.error(f"构建用户路由树失败: {e}", exc_info=True)
+            return []
     
     async def get_user_permissions(self, user_id: int) -> List[str]:
         """
