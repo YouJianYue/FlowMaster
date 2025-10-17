@@ -6,11 +6,18 @@
 
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
 class TenantReq(BaseModel):
     """租户创建或修改请求参数 - 一比一复刻参考项目TenantReq"""
+
+    # 🔥 添加Pydantic配置，支持驼峰命名转换
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True
+    )
 
     # 名称
     name: str = Field(..., min_length=1, max_length=30, description="名称")

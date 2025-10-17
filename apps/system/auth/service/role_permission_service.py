@@ -30,17 +30,28 @@ class RolePermissionService:
 
         完全复刻参考项目的 RoleService.listPermissionByUserId() 方法
 
+        🔥 添加租户隔离过滤
+
         Args:
             user_id: 用户ID
 
         Returns:
             权限码集合
         """
+        from apps.common.context.tenant_context_holder import TenantContextHolder
+
         permissions = set()
 
         async with DatabaseSession.get_session_context() as session:
-            # 查询用户的角色ID列表
+            # 🔥 构建查询用户角色的语句，添加租户隔离
             role_stmt = select(UserRoleEntity.role_id).where(UserRoleEntity.user_id == user_id)
+
+            # 🔥 一比一复刻参考项目：添加租户隔离过滤
+            if TenantContextHolder.isTenantEnabled():
+                tenant_id = TenantContextHolder.getTenantId()
+                if tenant_id is not None:
+                    role_stmt = role_stmt.where(UserRoleEntity.tenant_id == tenant_id)
+
             role_result = await session.execute(role_stmt)
             role_ids = [row[0] for row in role_result.fetchall()]
 
@@ -81,12 +92,16 @@ class RolePermissionService:
 
         完全复刻参考项目的 RoleService.listByUserId() 方法
 
+        🔥 添加租户隔离过滤
+
         Args:
             user_id: 用户ID
 
         Returns:
             角色信息集合
         """
+        from apps.common.context.tenant_context_holder import TenantContextHolder
+
         roles = set()
 
         async with DatabaseSession.get_session_context() as session:
@@ -100,6 +115,18 @@ class RolePermissionService:
                 .join(UserRoleEntity, RoleEntity.id == UserRoleEntity.role_id)
                 .where(UserRoleEntity.user_id == user_id)
             )
+
+            # 🔥 一比一复刻参考项目：添加租户隔离过滤
+            if TenantContextHolder.isTenantEnabled():
+                tenant_id = TenantContextHolder.getTenantId()
+                if tenant_id is not None:
+                    # 同时过滤RoleEntity和UserRoleEntity的tenant_id
+                    role_stmt = role_stmt.where(
+                        and_(
+                            RoleEntity.tenant_id == tenant_id,
+                            UserRoleEntity.tenant_id == tenant_id
+                        )
+                    )
 
             role_result = await session.execute(role_stmt)
             role_entities = role_result.scalars().all()

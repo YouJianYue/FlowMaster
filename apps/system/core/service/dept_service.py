@@ -93,3 +93,17 @@ class DeptService(ABC):
             bool: 是否删除成功
         """
         pass
+
+    @abstractmethod
+    async def update_dept_status(self, dept_id: Union[int, str], status: int) -> bool:
+        """
+        更新部门状态
+
+        Args:
+            dept_id: 部门ID
+            status: 状态（1=启用，2=禁用）
+
+        Returns:
+            bool: 是否更新成功
+        """
+        pass

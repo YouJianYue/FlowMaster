@@ -4,7 +4,7 @@
 """
 
 from typing import Optional, Union, List
-from sqlalchemy import select, or_, func, delete
+from sqlalchemy import select, or_, func, delete, and_
 
 from ..user_service import UserService
 from apps.system.core.model.req.user_req import UserUpdateReq
@@ -17,6 +17,7 @@ from apps.common.models.page_resp import PageResp
 from apps.common.config.database.database_session import DatabaseSession
 from apps.common.config.logging import get_logger
 from apps.common.context.user_context_holder import UserContextHolder
+from apps.common.context.tenant_context_holder import TenantContextHolder
 from apps.common.config.exception.global_exception_handler import BusinessException
 
 
@@ -53,6 +54,12 @@ class UserServiceImpl(UserService):
             async with DatabaseSession.get_session_context() as session:
                 # 构建查询条件
                 query = select(UserEntity)
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        query = query.where(UserEntity.tenant_id == tenant_id)
 
                 # 添加部门过滤 - 递归查询子部门
                 if dept_id:
@@ -127,8 +134,14 @@ class UserServiceImpl(UserService):
         """
         try:
             async with DatabaseSession.get_session_context() as session:
-                # 查询用户详情
+                # 构建查询条件
                 query = select(UserEntity).where(UserEntity.id == int(user_id))
+
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        query = query.where(UserEntity.tenant_id == tenant_id)
+
                 result = await session.execute(query)
                 user = result.scalar_one_or_none()
 
@@ -137,16 +150,29 @@ class UserServiceImpl(UserService):
 
                 # 查询用户角色信息（包括角色ID和名称）
                 from apps.system.core.model.entity.role_entity import RoleEntity
+
                 role_query = (
                     select(UserRoleEntity.role_id, RoleEntity.name)
                     .join(RoleEntity, UserRoleEntity.role_id == RoleEntity.id)
                     .where(UserRoleEntity.user_id == user.id)
                 )
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id_context = TenantContextHolder.getTenantId()
+                    if tenant_id_context is not None:
+                        role_query = role_query.where(
+                            and_(
+                                UserRoleEntity.tenant_id == tenant_id_context,
+                                RoleEntity.tenant_id == tenant_id_context
+                            )
+                        )
+
                 role_result = await session.execute(role_query)
                 roles_data = role_result.fetchall()
 
                 # 分别构建角色ID和角色名称列表
-                role_ids = [role_data.role_id for role_data in roles_data]  # 保持数字类型，与分页查询一致
+                role_ids = [str(role_data.role_id) for role_data in roles_data]  # 🔥 转为字符串避免JavaScript大整数精度丢失
                 role_names = [role_data.name for role_data in roles_data]
 
                 # 查询部门名称
@@ -176,8 +202,18 @@ class UserServiceImpl(UserService):
         """
         try:
             async with DatabaseSession.get_session_context() as session:
-                # 1. 查询用户
-                user = await session.get(UserEntity, int(user_id))
+                # 1. 查询用户（添加租户隔离）
+                stmt = select(UserEntity).where(UserEntity.id == int(user_id))
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        stmt = stmt.where(UserEntity.tenant_id == tenant_id)
+
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+
                 if not user:
                     raise ValueError(f"用户不存在: {user_id}")
 
@@ -204,10 +240,16 @@ class UserServiceImpl(UserService):
 
                 # 3b. 添加新的角色关联
                 if update_req.role_ids:
+                    # 🔥 获取当前租户ID（一比一复刻参考项目）
+                    current_tenant_id = user.tenant_id  # 使用查询到的用户的租户ID
                     for role_id in update_req.role_ids:
                         # 支持字符串和数字类型的角色ID
                         role_id_int = int(role_id) if isinstance(role_id, str) else role_id
-                        user_role = UserRoleEntity(user_id=int(user_id), role_id=role_id_int)
+                        user_role = UserRoleEntity(
+                            user_id=int(user_id),
+                            role_id=role_id_int,
+                            tenant_id=current_tenant_id  # 🔥 设置租户ID，避免默认值0
+                        )
                         session.add(user_role)
 
                 # 4. 提交事务
@@ -233,8 +275,18 @@ class UserServiceImpl(UserService):
         """
         try:
             async with DatabaseSession.get_session_context() as session:
-                # 1. 验证用户是否存在
-                user = await session.get(UserEntity, int(user_id))
+                # 1. 验证用户是否存在（添加租户隔离）
+                stmt = select(UserEntity).where(UserEntity.id == int(user_id))
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        stmt = stmt.where(UserEntity.tenant_id == tenant_id)
+
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+
                 if not user:
                     raise ValueError(f"用户不存在: {user_id}")
 
@@ -245,10 +297,16 @@ class UserServiceImpl(UserService):
 
                 # 3. 保存新的角色关联 - 对应参考项目 CollUtils.mapToList(roleIds, roleId -> new UserRoleDO(userId, roleId))
                 if update_req.role_ids:
+                    # 🔥 获取当前租户ID（一比一复刻参考项目）
+                    current_tenant_id = user.tenant_id  # 使用查询到的用户的租户ID
                     for role_id in update_req.role_ids:
                         # 支持字符串和数字类型的角色ID
                         role_id_int = int(role_id) if isinstance(role_id, str) else role_id
-                        user_role = UserRoleEntity(user_id=int(user_id), role_id=role_id_int)
+                        user_role = UserRoleEntity(
+                            user_id=int(user_id),
+                            role_id=role_id_int,
+                            tenant_id=current_tenant_id  # 🔥 设置租户ID，避免默认值0
+                        )
                         session.add(user_role)
 
                 # 4. 提交事务
@@ -278,9 +336,16 @@ class UserServiceImpl(UserService):
                 if current_user_id and current_user_id in [int(id_) for id_ in ids]:
                     raise BusinessException("不允许删除当前用户")
 
-                # 2. 查询要删除的用户信息 - 对应参考项目 baseMapper.lambdaQuery().select().in().list()
+                # 2. 查询要删除的用户信息（添加租户隔离） - 对应参考项目 baseMapper.lambdaQuery().select().in().list()
                 int_ids = [int(id_) for id_ in ids]
                 users_query = select(UserEntity).where(UserEntity.id.in_(int_ids))
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        users_query = users_query.where(UserEntity.tenant_id == tenant_id)
+
                 result = await session.execute(users_query)
                 users = result.scalars().all()
 
@@ -353,10 +418,34 @@ class UserServiceImpl(UserService):
         """
         try:
             async with DatabaseSession.get_session_context() as session:
-                # 查询用户信息
+                # 一比一复刻参考项目：添加租户隔离过滤
+                # 调试日志：输出租户上下文信息
+                is_tenant_enabled = TenantContextHolder.isTenantEnabled()
+                current_tenant_id = TenantContextHolder.getTenantId()
+                self.logger.debug(f"[调试] UserService.get() - 用户ID={user_id}, 租户功能启用={is_tenant_enabled}, 当前租户ID={current_tenant_id}")
+
+                # 构建查询条件
                 stmt = select(UserEntity).where(UserEntity.id == int(user_id))
+
+                # 添加租户隔离过滤
+                if is_tenant_enabled:
+                    if current_tenant_id is not None:
+                        stmt = stmt.where(UserEntity.tenant_id == current_tenant_id)
+                        self.logger.debug(f"[调试] 添加租户过滤条件: tenant_id={current_tenant_id}")
+                    else:
+                        self.logger.warning("[调试] 租户功能已启用但租户ID为None")
+
+                # 调试日志：输出SQL查询
+                self.logger.debug(f"[调试] 准备执行查询，查询用户ID={user_id}")
+
                 result = await session.execute(stmt)
                 user = result.scalar_one_or_none()
+
+                # 调试日志：输出查询结果
+                if user:
+                    self.logger.debug(f"[调试] 查询成功，找到用户: ID={user.id}, username={user.username}, tenant_id={user.tenant_id}")
+                else:
+                    self.logger.warning(f"[调试] 查询失败，未找到用户: user_id={user_id}, 查询租户ID={current_tenant_id}")
 
                 if not user:
                     raise BusinessException(f"用户不存在: {user_id}")
@@ -450,16 +539,28 @@ class UserServiceImpl(UserService):
 
             # 查询用户角色信息
             from apps.system.core.model.entity.role_entity import RoleEntity
+
             role_query = (
                 select(UserRoleEntity.role_id, RoleEntity.name)
                 .join(RoleEntity, UserRoleEntity.role_id == RoleEntity.id)
                 .where(UserRoleEntity.user_id == entity.id)
             )
+
+            # 🔥 一比一复刻参考项目：添加租户隔离过滤
+            if TenantContextHolder.isTenantEnabled():
+                tenant_id = TenantContextHolder.getTenantId()
+                if tenant_id is not None:
+                    role_query = role_query.where(
+                        and_(
+                            UserRoleEntity.tenant_id == tenant_id,
+                            RoleEntity.tenant_id == tenant_id
+                        )
+                    )
             role_result = await session.execute(role_query)
             roles_data = role_result.fetchall()
 
             # 构建角色ID和名称列表
-            role_ids = [role_data.role_id for role_data in roles_data]  # 保持数字类型
+            role_ids = [str(role_data.role_id) for role_data in roles_data]  # 🔥 转为字符串避免JavaScript大整数精度丢失
             role_names = [role_data.name for role_data in roles_data]
 
             return UserResp(
@@ -473,7 +574,7 @@ class UserServiceImpl(UserService):
                 status=entity.status.value if hasattr(entity.status, 'value') else entity.status,  # 转换枚举为整数值
                 is_system=entity.is_system,  # 使用数据库中的真实值
                 description=entity.description,
-                dept_id=entity.dept_id,  # 保持数字类型，与参考项目一致
+                dept_id=str(entity.dept_id) if entity.dept_id else None,  # 🔥 转为字符串避免JavaScript大整数精度丢失
                 dept_name=dept_name,  # 真实部门名称
                 role_ids=role_ids,  # 真实角色ID列表（数字类型）
                 role_names=role_names,  # 真实角色名称列表
@@ -498,7 +599,7 @@ class UserServiceImpl(UserService):
                 status=entity.status.value if hasattr(entity.status, 'value') else entity.status,  # 转换枚举为整数值
                 is_system=entity.is_system,
                 description=entity.description,
-                dept_id=entity.dept_id,
+                dept_id=str(entity.dept_id) if entity.dept_id else None,  # 🔥 转为字符串避免JavaScript大整数精度丢失
                 dept_name="未知部门",
                 role_ids=[],
                 role_names=[],
@@ -564,7 +665,7 @@ class UserServiceImpl(UserService):
             status=entity.status.value if hasattr(entity.status, 'value') else entity.status,  # 转换枚举为整数值
             is_system=entity.is_system,
             description=entity.description,
-            dept_id=entity.dept_id,  # 保持数字类型，与分页查询一致
+            dept_id=str(entity.dept_id) if entity.dept_id else None,  # 🔥 转为字符串避免JavaScript大整数精度丢失
             dept_name=dept_name,
             role_ids=role_ids if role_ids is not None else [],
             role_names=role_names if role_names is not None else [],
@@ -590,6 +691,12 @@ class UserServiceImpl(UserService):
         async with DatabaseSession.get_session_context() as session:
             # 构建查询条件
             stmt = select(UserEntity.id, UserEntity.nickname, UserEntity.username)
+
+            # 🔥 一比一复刻参考项目：添加租户隔离过滤
+            if TenantContextHolder.isTenantEnabled():
+                tenant_id = TenantContextHolder.getTenantId()
+                if tenant_id is not None:
+                    stmt = stmt.where(UserEntity.tenant_id == tenant_id)
 
             # 添加状态过滤条件
             if status is not None:

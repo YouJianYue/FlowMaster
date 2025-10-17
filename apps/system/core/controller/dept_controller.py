@@ -5,11 +5,8 @@
 
 from fastapi import APIRouter, Query, Path, Depends, HTTPException
 from typing import List, Optional, Union
-from datetime import datetime
-from sqlalchemy import select
 
 from apps.common.models.api_response import ApiResponse, create_success_response
-from apps.common.config.database.database_session import DatabaseSession
 from apps.system.core.service.dept_service import DeptService
 from apps.system.core.service.impl.dept_service_impl import DeptServiceImpl
 from apps.system.core.model.resp.dept_resp import DeptResp
@@ -17,7 +14,6 @@ from apps.system.core.model.resp.dept_resp_exact import DeptRespExact
 from apps.system.core.model.req.dept_req import DeptCreateReq, DeptUpdateReq
 from apps.system.core.model.req.dept_batch_delete_req import DeptBatchDeleteReq
 from apps.common.models.req.common_status_update_req import CommonStatusUpdateReq
-from apps.system.core.model.entity.dept_entity import DeptEntity
 
 
 router = APIRouter(prefix="/system/dept", tags=["部门管理"])
@@ -44,7 +40,8 @@ async def get_dept_tree(
 
 @router.get("/{dept_id}", response_model=ApiResponse[DeptRespExact], summary="查询部门详情")
 async def get_dept_detail(
-    dept_id: Union[int, str] = Path(..., description="部门ID", example="1")
+    dept_id: Union[int, str] = Path(..., description="部门ID", example="1"),
+    dept_service: DeptService = Depends(get_dept_service)
 ):
     """
     查询部门详情（完全匹配参考项目格式）
@@ -52,33 +49,26 @@ async def get_dept_detail(
     根据部门ID查询部门的详细信息。
     """
     try:
-        # 使用ORM查询，符合规范
-        async with DatabaseSession.get_session_context() as session:
-            # 使用ORM查询而不是原生SQL
-            stmt = select(DeptEntity).where(DeptEntity.id == int(dept_id))
-            result = await session.execute(stmt)
-            dept = result.scalar_one_or_none()
+        # 使用Service层查询，符合分层架构
+        dept_resp = await dept_service.get_dept_detail(dept_id)
 
-            if not dept:
-                raise HTTPException(status_code=404, detail=f"部门不存在: {dept_id}")
+        # 转换为DeptRespExact格式
+        dept_resp_exact = DeptRespExact.from_database_row(
+            id=int(dept_resp.id),
+            name=dept_resp.name,
+            parent_id=dept_resp.parent_id,
+            description=dept_resp.description,
+            sort=dept_resp.sort,
+            status=dept_resp.status,
+            is_system=dept_resp.is_system,
+            create_time=dept_resp.create_time,
+            update_time=dept_resp.update_time
+        )
 
-            # 构造匹配参考项目的响应
-            dept_resp = DeptRespExact.from_database_row(
-                id=dept.id,
-                name=dept.name,
-                parent_id=dept.parent_id,
-                description=dept.description,
-                sort=dept.sort,
-                status=dept.status,
-                is_system=dept.is_system,
-                create_time=dept.create_time.strftime("%Y-%m-%d %H:%M:%S") if dept.create_time else None,
-                update_time=dept.update_time.strftime("%Y-%m-%d %H:%M:%S") if dept.update_time else None
-            )
+        return create_success_response(data=dept_resp_exact)
 
-            return create_success_response(data=dept_resp)
-
-    except HTTPException:
-        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询部门详情失败: {str(e)}")
 
@@ -105,10 +95,12 @@ async def create_dept(
     新增部门
 
     创建新的部门记录。
-    """
-    # TODO: 添加权限验证
-    # TODO: 添加数据验证（如：部门名称重复检查、上级部门存在检查等）
 
+    一比一复刻参考项目：所有验证逻辑在Service层实现
+    - 检查部门名称是否重复（同一上级部门下）
+    - 检查上级部门是否存在
+    - 自动设置祖级列表ancestors
+    """
     result = await dept_service.create_dept(dept_req)
     return create_success_response(data=result, message="新增成功")
 
@@ -123,11 +115,15 @@ async def update_dept(
     修改部门
 
     根据部门ID更新部门信息。
-    """
-    # TODO: 添加权限验证
-    # TODO: 添加数据验证（如：部门是否存在、部门名称重复检查等）
-    # TODO: 检查是否为自身的子部门作为上级部门（防止循环引用）
 
+    一比一复刻参考项目：所有验证逻辑在Service层实现
+    - 检查部门名称是否重复
+    - 系统内置部门不允许禁用和变更上级部门
+    - 禁用部门前检查是否有启用的子部门
+    - 启用部门前检查上级部门是否已启用
+    - 变更上级部门时自动更新祖级列表
+    - 防止选择自己或子部门作为上级部门
+    """
     result = await dept_service.update_dept(dept_id, dept_req)
     return create_success_response(data=result, message="修改成功")
 
@@ -144,32 +140,14 @@ async def update_dept_status(
     根据部门ID修改部门状态。
     """
     try:
-        # 使用ORM执行状态更新
-        async with DatabaseSession.get_session_context() as session:
-            # 使用ORM查询部门信息
-            stmt = select(DeptEntity).where(DeptEntity.id == int(dept_id))
-            result = await session.execute(stmt)
-            dept = result.scalar_one_or_none()
+        # 使用Service层更新状态，符合分层架构
+        success = await dept_service.update_dept_status(dept_id, status_req.status)
 
-            if not dept:
-                raise HTTPException(status_code=404, detail=f"部门不存在: {dept_id}")
+        status_text = "启用" if status_req.status == 1 else "禁用"
+        return create_success_response(data=success, message=f"{status_text}成功")
 
-            # 检查系统内置部门是否可以禁用
-            if dept.is_system and status_req.status == 2:  # 2=禁用
-                raise HTTPException(status_code=400, detail=f"[{dept.name}] 是系统内置部门，不允许禁用")
-
-            # 使用ORM更新部门状态
-            dept.status = status_req.status
-            dept.update_user = 1  # TODO: 从上下文获取当前用户ID
-            dept.update_time = datetime.now()
-
-            await session.commit()
-
-            status_text = "启用" if status_req.status == 1 else "禁用"
-            return create_success_response(data=True, message=f"{status_text}成功")
-
-    except HTTPException:
-        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"修改状态失败: {str(e)}")
 
@@ -183,13 +161,13 @@ async def delete_dept(
     删除部门
 
     根据部门ID删除部门记录。
-    """
-    # TODO: 添加权限验证
-    # TODO: 添加删除前检查：
-    #   1. 检查是否存在子部门
-    #   2. 检查是否有用户关联
-    #   3. 检查是否为系统内置部门
 
+    一比一复刻参考项目：所有验证逻辑在Service层实现
+    - 系统内置部门不允许删除
+    - 存在子部门不允许删除
+    - 存在用户关联不允许删除
+    - 自动删除角色和部门关联（TODO: 待实现RoleDeptService）
+    """
     success = await dept_service.delete_dept(dept_id)
     if success:
         return create_success_response(data=True, message="删除成功")

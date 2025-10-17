@@ -5,7 +5,7 @@
 """
 
 from typing import Optional
-from sqlalchemy import Column, String, Integer, Boolean, Text
+from sqlalchemy import Column, String, Integer, Boolean, Text, BigInteger
 from pydantic import ConfigDict, Field
 # 暂时移除relationship，避免循环引用问题
 from apps.common.base.model.entity.base_entity import BaseEntity
@@ -48,8 +48,11 @@ class RoleEntity(BaseEntity):
     # 部门选择是否父子节点关联
     dept_check_strictly: bool = Column(Boolean, nullable=False, default=True, comment="部门选择是否父子节点关联")
 
+    # 租户ID - 对应参考项目的租户隔离字段
+    tenant_id: int = Column(BigInteger, nullable=False, default=0, index=True, comment="租户ID")
+
     # 注意：参考项目的sys_role表没有status字段，已移除
-    
+
     # ==========================================
     # 关联关系定义 - 暂时删除所有关系映射
     # ==========================================

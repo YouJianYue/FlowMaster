@@ -10,17 +10,18 @@ from typing import List, Optional, Set, TYPE_CHECKING
 from sqlalchemy import select, func, or_, delete
 
 from apps.common.config.database.database_session import DatabaseSession
+from apps.common.config.logging import get_logger
+from apps.common.enums.data_scope_enum import DataScopeEnum
+from apps.common.context.tenant_context_holder import TenantContextHolder
+
 from apps.system.core.model.entity.role_entity import RoleEntity
 from apps.system.core.model.entity.user_role_entity import UserRoleEntity
 from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
 from apps.system.core.model.entity.menu_entity import MenuEntity
-from apps.common.config.logging import get_logger
-from apps.common.enums.data_scope_enum import DataScopeEnum
 
 if TYPE_CHECKING:
     from apps.system.core.model.resp.role_resp import RoleResp
     from apps.common.models.page_resp import PageResp
-
 
 class RoleService:
     """
@@ -82,14 +83,23 @@ class RoleService:
             List[RoleEntity]: 角色列表
         """
         try:
+
             async with DatabaseSession.get_session_context() as session:
                 # 查询用户角色关联表，获取角色信息
                 stmt = (
                     select(RoleEntity)
                     .join(UserRoleEntity, RoleEntity.id == UserRoleEntity.role_id)
                     .where(UserRoleEntity.user_id == user_id)
-                    .order_by(RoleEntity.sort, RoleEntity.id)
                 )
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        stmt = stmt.where(RoleEntity.tenant_id == tenant_id)
+                        stmt = stmt.where(UserRoleEntity.tenant_id == tenant_id)
+
+                stmt = stmt.order_by(RoleEntity.sort, RoleEntity.id)
                 result = await session.execute(stmt)
                 return list(result.scalars().all())
         except Exception as e:
@@ -142,6 +152,7 @@ class RoleService:
             Set[str]: 权限码集合
         """
         try:
+
             # 检查是否为超级管理员
             is_super_admin = await self.is_super_admin_user(user_id)
 
@@ -163,6 +174,12 @@ class RoleService:
                         MenuEntity.status == 1
                     )
                 )
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        stmt = stmt.where(UserRoleEntity.tenant_id == tenant_id)
 
                 result = await session.execute(stmt)
                 permissions = result.scalars().all()
@@ -325,12 +342,19 @@ class RoleService:
         """
         from apps.system.core.model.resp.role_resp import RoleResp
         from apps.common.models.page_resp import PageResp
+        from apps.common.context.tenant_context_holder import TenantContextHolder
 
         try:
 
             async with DatabaseSession.get_session_context() as session:
                 # 构建基础查询
                 base_stmt = select(RoleEntity)
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        base_stmt = base_stmt.where(RoleEntity.tenant_id == tenant_id)
 
                 # 添加过滤条件
                 if filters.get('description'):  # 关键词搜索
@@ -680,6 +704,10 @@ class RoleService:
         """
         查询角色字典列表（用于下拉选择等）
 
+        一比一复刻参考项目 RoleServiceImpl.dict():
+        - 租户管理员：只排除super_admin角色
+        - 普通用户：排除所有超级角色（super_admin和tenant_admin）
+
         Args:
             **filters: 过滤条件
 
@@ -687,9 +715,27 @@ class RoleService:
             List[dict]: 角色字典数据
         """
         try:
+            from apps.common.context.user_context_holder import UserContextHolder
+
             async with DatabaseSession.get_session_context() as session:
                 # 构建基础查询
                 base_stmt = select(RoleEntity)
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        base_stmt = base_stmt.where(RoleEntity.tenant_id == tenant_id)
+
+                # 🔥 一比一复刻参考项目：根据当前用户角色排除系统角色
+                is_tenant_admin = UserContextHolder.is_tenant_admin()
+
+                if is_tenant_admin:
+                    # 租户管理员：只排除super_admin
+                    base_stmt = base_stmt.where(RoleEntity.code != "super_admin")
+                else:
+                    # 普通用户：排除所有超级角色
+                    base_stmt = base_stmt.where(RoleEntity.code.notin_(["super_admin", "tenant_admin"]))
 
                 # 添加过滤条件
                 if filters.get('description'):  # 关键词搜索
@@ -727,13 +773,12 @@ class RoleService:
                 result = await session.execute(base_stmt)
                 roles = result.scalars().all()
 
-                # 转换为字典格式
+                # 转换为字典格式（一比一复刻参考项目：无disabled字段）
                 role_dict_list = []
                 for role in roles:
                     role_dict = {
                         "label": role.name,
-                        "value": str(role.id),
-                        "disabled": role.is_system  # 系统角色不可选择
+                        "value": str(role.id)
                     }
                     role_dict_list.append(role_dict)
 
@@ -759,6 +804,12 @@ class RoleService:
             async with DatabaseSession.get_session_context() as session:
                 # 构建基础查询
                 base_stmt = select(RoleEntity)
+
+                # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                if TenantContextHolder.isTenantEnabled():
+                    tenant_id = TenantContextHolder.getTenantId()
+                    if tenant_id is not None:
+                        base_stmt = base_stmt.where(RoleEntity.tenant_id == tenant_id)
 
                 # 添加过滤条件
                 if filters.get('description'):  # 关键词搜索
@@ -825,7 +876,6 @@ class RoleService:
         except Exception as e:
             self.logger.error(f"查询角色简单列表失败: {str(e)}", exc_info=True)
             return []
-
 
 # 依赖注入函数
 def get_role_service() -> RoleService:

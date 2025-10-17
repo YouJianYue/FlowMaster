@@ -8,13 +8,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.common.middleware.jwt_auth_middleware import JWTAuthMiddleware
+from apps.common.middleware.tenant_middleware import TenantMiddleware
 from apps.common.config.app_config import app_config
 
 
 def register_middlewares(app: FastAPI) -> None:
-    """注册所有中间件"""
+    """注册所有中间件
 
-    # 配置 CORS
+    注意：FastAPI中间件是后注册先执行（洋葱模型）
+    - 最后注册的中间件在最外层，最先执行
+    - 最先注册的中间件在最内层，最后执行
+    """
+
+    # 配置 CORS（第1个注册，最内层执行）
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_config.cors_origins_list,
@@ -23,11 +29,18 @@ def register_middlewares(app: FastAPI) -> None:
         allow_headers=app_config.cors_headers_list,
     )
 
-    # 添加 JWT 认证中间件
+    # 添加租户中间件（第2个注册，中间层执行）
+    app.add_middleware(TenantMiddleware)
+
+    # 添加 JWT 认证中间件（第3个注册，最外层执行，最先执行）
+    # JWT必须在最外层，这样才能先解析Token并设置租户上下文
+    # 然后TenantMiddleware才能检测到JWT设置的租户上下文
     app.add_middleware(
         JWTAuthMiddleware,
         exclude_paths=app_config.jwt_exclude_paths_list,
     )
 
-    # 注意：日志拦截中间件已注释，使用 @Log 装饰器替代（一比一复刻参考项目AOP方式）
+    # 注意：日志拦截中间件已注释，使用 @Log 装饰器替代
     # app.add_middleware(LogInterceptorMiddleware)
+
+

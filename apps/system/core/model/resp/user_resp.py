@@ -32,9 +32,9 @@ class UserResp(BaseModel):
     status: int = Field(description="状态：1启用，2禁用", examples=[1])
     is_system: bool = Field(False, description="是否为系统用户", examples=[False], serialization_alias="isSystem")
     description: Optional[str] = Field(None, description="描述", examples=["代码写到极致，就是艺术。"])
-    dept_id: Optional[Union[int, str]] = Field(None, description="部门ID", examples=["547887852587843595"], serialization_alias="deptId")
+    dept_id: Optional[str] = Field(None, description="部门ID（字符串类型，避免JavaScript大整数精度丢失）", examples=["547887852587843595"], serialization_alias="deptId")
     dept_name: Optional[str] = Field(None, description="部门名称", examples=["研发一组"], serialization_alias="deptName")
-    role_ids: List[Union[int, str]] = Field(default_factory=list, description="角色ID列表", examples=[["547888897925840928"]], serialization_alias="roleIds")
+    role_ids: List[str] = Field(default_factory=list, description="角色ID列表（字符串类型，避免JavaScript大整数精度丢失）", examples=[["547888897925840928"]], serialization_alias="roleIds")
     role_names: List[str] = Field(default_factory=list, description="角色名称列表", examples=[["研发人员"]], serialization_alias="roleNames")
     
     def __init__(self, **data):

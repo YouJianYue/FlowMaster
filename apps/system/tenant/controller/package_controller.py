@@ -30,18 +30,20 @@ async def page_packages(
     size: int = QueryParam(10, description="每页数量", ge=1, le=100),
     sort: str = QueryParam(None, description="排序字段"),
     package_service: PackageService = Depends(get_package_service)
-) -> PageResp[PackageResp]:
+) -> ApiResponse:
     """
     分页查询套餐列表
 
     一比一复刻参考项目 BaseController.page()
+    返回格式必须包装成 ApiResponse
     """
     query = PackageQuery(description=description, status=status)
     # 处理sort参数 - sort格式如 "createTime,desc"
     sort_list = [sort] if sort else None
     page_query = PageQuery(page=page, size=size, sort=sort_list)
     result = await package_service.page(query, page_query)
-    return result
+    # 🔥 修复：必须包装成 ApiResponse，否则前端无法解析
+    return create_success_response(data=result)
 
 
 @router.get("/list", summary="查询套餐列表")

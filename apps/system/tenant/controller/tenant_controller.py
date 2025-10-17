@@ -35,11 +35,12 @@ async def page_tenants(
     size: int = QueryParam(10, description="每页数量", ge=1, le=100),
     sort: str = QueryParam(None, description="排序字段"),
     tenant_service: TenantService = Depends(get_tenant_service)
-) -> PageResp[TenantResp]:
+) -> ApiResponse:
     """
     分页查询租户列表
 
     一比一复刻参考项目 BaseController.page()
+    返回格式必须包装成 ApiResponse
     """
     query = TenantQuery(
         description=description,
@@ -51,7 +52,8 @@ async def page_tenants(
     sort_list = [sort] if sort else None
     page_query = PageQuery(page=page, size=size, sort=sort_list)
     result = await tenant_service.page(query, page_query)
-    return result
+    # 🔥 修复：必须包装成 ApiResponse，否则前端无法解析
+    return create_success_response(data=result)
 
 
 @router.get("/{tenant_id}", summary="查询租户详情")

@@ -55,6 +55,11 @@ class DeptEntity(BaseEntity):
         Boolean, nullable=False, default=False, comment="是否为系统内置数据"
     )
 
+    # 租户ID - 对应参考项目的租户隔离字段
+    tenant_id: int = Column(
+        BigInteger, nullable=False, default=0, index=True, comment="租户ID"
+    )
+
     # ==========================================
     # 关联关系定义 - 删除所有关系映射，优先保证基本功能
     # ==========================================

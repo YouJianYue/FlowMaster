@@ -29,6 +29,9 @@ class UserRoleEntity(Base):
     # 角色ID
     role_id: int = Column(BigInteger, ForeignKey('sys_role.id', ondelete='CASCADE'), nullable=False, comment="角色ID")
 
+    # 租户ID - 对应参考项目的租户隔离字段
+    tenant_id: int = Column(BigInteger, nullable=False, default=0, index=True, comment="租户ID")
+
     # ==========================================
     # 关联关系定义 - 暂时删除，等基本功能稳定后再添加
     # ==========================================

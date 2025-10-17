@@ -16,6 +16,7 @@ from apps.common.models.page_query import PageQuery
 from apps.common.models.page_resp import PageResp
 from apps.common.config.database.database_session import DatabaseSession
 from apps.common.config.exception.global_exception_handler import BusinessException
+from apps.system.tenant.service.impl.package_menu_service_impl import package_menu_service
 
 
 class PackageServiceImpl(PackageService):
@@ -152,8 +153,8 @@ class PackageServiceImpl(PackageService):
             if not pkg:
                 return None
 
-            # TODO: 查询关联的菜单ID列表
-            menu_ids = []  # 暂时返回空列表
+            # 查询关联的菜单ID列表
+            menu_ids = await package_menu_service.list_menu_ids_by_package_id(package_id)
 
             return PackageDetailResp(
                 id=pkg.id,
@@ -173,8 +174,15 @@ class PackageServiceImpl(PackageService):
         """
         创建套餐
 
+        一比一复刻参考项目事务处理:
+        - PackageServiceImpl.create() 调用 super.create() + packageMenuService.add()
+        - Spring会将整个方法作为一个事务处理
+        - Python需要手动管理事务，将所有操作放在同一个session中
+
         注意: create_user 和 create_time 由自动填充监听器处理
         """
+        from apps.system.tenant.model.entity.package_menu_entity import PackageMenuEntity
+
         async with DatabaseSession.get_session_context() as session:
             # 检查名称是否重复
             await self._check_name_repeat(session, req.name, None)
@@ -189,11 +197,21 @@ class PackageServiceImpl(PackageService):
             )
 
             session.add(pkg)
+            await session.flush()  # 🔥 使用flush而不是commit，获取pkg.id但不提交事务
+
+            # 保存套餐和菜单关联（在同一个事务中）
+            # 一比一复刻参考项目: packageMenuService.add(req.getMenuIds(), id)
+            if req.menu_ids:
+                # 直接在当前session中插入，不调用service（避免嵌套事务）
+                new_associations = [
+                    PackageMenuEntity(package_id=pkg.id, menu_id=menu_id)
+                    for menu_id in req.menu_ids
+                ]
+                session.add_all(new_associations)
+
+            # 🔥 所有操作成功后才提交事务，任何异常都会触发回滚
             await session.commit()
             await session.refresh(pkg)
-
-            # TODO: 保存套餐和菜单关联
-            # packageMenuService.add(req.getMenuIds(), id)
 
             return pkg.id
 
@@ -201,8 +219,15 @@ class PackageServiceImpl(PackageService):
         """
         更新套餐
 
+        一比一复刻参考项目事务处理:
+        - 所有操作在一个事务中完成
+        - 任何异常都会回滚整个事务
+
         注意: update_user 和 update_time 由自动填充监听器处理
         """
+        from apps.system.tenant.model.entity.package_menu_entity import PackageMenuEntity
+        from sqlalchemy import delete
+
         async with DatabaseSession.get_session_context() as session:
             stmt = select(PackageEntity).where(PackageEntity.id == package_id)
             result = await session.execute(stmt)
@@ -222,10 +247,38 @@ class PackageServiceImpl(PackageService):
             if req.status is not None:
                 pkg.status = req.status
 
-            await session.commit()
+            # 保存套餐和菜单关联（在同一个事务中）
+            # 一比一复刻参考项目: packageMenuService.add(req.getMenuIds(), id)
+            if req.menu_ids is not None:  # 使用is not None检查，因为空列表[]也是有效的
+                # 1. 查询旧的菜单ID列表
+                old_menu_ids_query = select(PackageMenuEntity.menu_id).where(
+                    PackageMenuEntity.package_id == package_id
+                )
+                old_result = await session.execute(old_menu_ids_query)
+                old_menu_ids = [row[0] for row in old_result.fetchall()]
 
-            # TODO: 保存套餐和菜单关联
-            # packageMenuService.add(req.getMenuIds(), id)
+                # 2. 对比新旧列表，如果有变更才更新
+                old_set = set(old_menu_ids)
+                new_set = set(req.menu_ids) if req.menu_ids else set()
+                symmetric_diff = old_set.symmetric_difference(new_set)
+
+                if symmetric_diff:  # 有变更才更新
+                    # 3. 删除旧的关联
+                    delete_query = delete(PackageMenuEntity).where(
+                        PackageMenuEntity.package_id == package_id
+                    )
+                    await session.execute(delete_query)
+
+                    # 4. 插入新的关联
+                    if req.menu_ids:
+                        new_associations = [
+                            PackageMenuEntity(package_id=package_id, menu_id=menu_id)
+                            for menu_id in req.menu_ids
+                        ]
+                        session.add_all(new_associations)
+
+            # 🔥 所有操作成功后才提交事务
+            await session.commit()
 
             return True
 

@@ -82,6 +82,10 @@ class AccountLoginHandler(AbstractLoginHandler):
         """
         根据用户名获取用户实体
 
+        一比一复刻参考项目逻辑：
+        - 如果启用租户隔离，按username+tenant_id查询
+        - 如果未启用租户隔离，只按username查询
+
         Args:
             username: 用户名
 
@@ -90,10 +94,19 @@ class AccountLoginHandler(AbstractLoginHandler):
         """
         from apps.system.core.model.entity.user_entity import UserEntity
         from apps.common.config.database.database_session import DatabaseSession
+        from apps.common.context.tenant_context_holder import TenantContextHolder
         from sqlalchemy import select
 
         async with DatabaseSession.get_session_context() as session:
+            # 构建查询条件
             stmt = select(UserEntity).where(UserEntity.username == username)
+
+            # 一比一复刻参考项目：如果启用租户隔离，需要加上tenant_id过滤
+            if TenantContextHolder.isTenantEnabled():
+                tenant_id = TenantContextHolder.getTenantId()
+                if tenant_id is not None:
+                    stmt = stmt.where(UserEntity.tenant_id == tenant_id)
+
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 

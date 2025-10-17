@@ -22,12 +22,10 @@ class TenantContextHolder:
         Returns:
             bool: 租户功能是否启用
         """
-        # 根据参考项目的逻辑，这里应该检查租户配置
-        # 暂时返回True来启用租户功能，实际应该从配置中读取
         try:
-            # 租户功能总是启用的，除非在配置中明确禁用
-            # 参考项目中这个方法通常检查Spring配置或系统属性
-            return True
+            from apps.common.config.tenant_extension_properties import get_tenant_extension_properties
+            tenant_properties = get_tenant_extension_properties()
+            return tenant_properties.enabled
         except Exception as e:
             print(f"{__file__}  isTenantEnabled failed: {e} ")
             # 如果配置加载失败，默认启用租户功能

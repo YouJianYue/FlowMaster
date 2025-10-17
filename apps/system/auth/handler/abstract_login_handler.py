@@ -108,7 +108,13 @@ class AbstractLoginHandler(ABC):
 
         # 获取用户ID和租户ID
         user_id = user.id
-        tenant_id = 1  # TODO: 从TenantContextHolder获取，目前默认为1
+
+        # 一比一复刻参考项目：从TenantContextHolder获取当前租户ID
+        from apps.common.context.tenant_context_holder import TenantContextHolder
+        tenant_id = TenantContextHolder.getTenantId()
+        if tenant_id is None:
+            # 如果没有设置租户上下文，使用用户实体的tenant_id
+            tenant_id = user.tenant_id if hasattr(user, 'tenant_id') and user.tenant_id else 1
 
         # 异步获取权限、角色、密码过期天数 (复刻参考项目的CompletableFuture逻辑)
         from apps.system.auth.service.role_permission_service import RolePermissionService

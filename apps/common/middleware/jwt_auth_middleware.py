@@ -215,6 +215,17 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # 设置用户上下文
         UserContextHolder.set_context(user_context)
 
+        # 一比一复刻参考项目：同时设置租户上下文
+        # 从 Token 中的 tenant_id 设置租户上下文
+        # TenantMiddleware 会在后面执行，如果请求头有 X-Tenant-Code 会覆盖这个设置
+        from apps.common.context.tenant_context_holder import TenantContextHolder
+        if user_context.tenant_id:
+            TenantContextHolder.setTenantId(user_context.tenant_id)
+            # 调试日志：记录从Token设置租户上下文
+            import logging
+            logger = logging.getLogger("JWTAuthMiddleware")
+            logger.debug(f"[调试] JWT中间件设置租户上下文: tenant_id={user_context.tenant_id}, user_id={user_id}, username={username}")
+
         # 设置用户额外信息
         from datetime import datetime
         extra_context = UserExtraContext(

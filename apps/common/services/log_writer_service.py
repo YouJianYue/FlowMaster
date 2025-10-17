@@ -202,6 +202,9 @@ class LogWriterService:
 
             logger.info(f"[DEBUG] {login_description}，{field_name}={field_value}")
 
+            # 🔥 一比一复刻参考项目：添加租户隔离过滤
+            from apps.common.context.tenant_context_holder import TenantContextHolder
+
             # 根据字段名动态构建查询条件
             if auth_type == "ACCOUNT":
                 stmt = select(UserEntity).where(UserEntity.username == field_value)
@@ -212,6 +215,12 @@ class LogWriterService:
             else:
                 # SOCIAL类型暂不处理
                 return None, login_description
+
+            # 添加租户隔离过滤
+            if TenantContextHolder.isTenantEnabled():
+                tenant_id = TenantContextHolder.getTenantId()
+                if tenant_id is not None:
+                    stmt = stmt.where(UserEntity.tenant_id == tenant_id)
 
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()

@@ -12,36 +12,42 @@ from apps.common.context.tenant_context import TenantContext
 
 class TenantExtensionProperties(BaseSettings):
     """租户扩展配置属性"""
-    
+
+    # 是否启用租户功能
+    enabled: bool = Field(
+        default=True,
+        description="是否启用租户功能"
+    )
+
     # 请求头中租户编码键名
     tenant_code_header: str = Field(
         default="X-Tenant-Code",
         description="请求头中租户编码键名"
     )
-    
+
     # 默认租户ID
     default_tenant_id: int = Field(
         default=0,
         description="默认租户ID"
     )
-    
+
     # 忽略菜单ID（租户不能使用的菜单）
     ignore_menus: Optional[List[int]] = Field(
         default=None,
         description="忽略菜单ID"
     )
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
-        env_prefix="tenant_",
-        case_sensitive=True,
+        env_prefix="TENANT_",
+        case_sensitive=False,
         extra="ignore"
     )
-    
+
     def is_default_tenant(self) -> bool:
         """
         是否为默认租户
-        
+
         Returns:
             是否为默认租户
         """

@@ -60,6 +60,9 @@ class UserEntity(BaseEntity):
     # 部门ID
     dept_id: Optional[int] = Column(BigInteger, nullable=True, comment="部门ID")
 
+    # 租户ID - 对应参考项目的租户隔离字段
+    tenant_id: int = Column(BigInteger, nullable=False, default=0, index=True, comment="租户ID")
+
     # ==========================================
     # 关联关系定义 - 暂时删除，等基本功能稳定后再添加
     # ==========================================

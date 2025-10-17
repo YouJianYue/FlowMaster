@@ -171,10 +171,37 @@ class TenantServiceImpl(TenantService):
             await session.commit()
             await session.refresh(entity)
 
-            # TODO: 初始化租户数据（创建管理员用户等）
-            # tenantDataApiMap.forEach((key, value) -> value.init(req))
+            tenant_id = entity.id
 
-            return entity.id
+        # 初始化租户数据（创建部门、角色、管理员用户等）
+        # 一比一复刻参考项目: tenantDataApiMap.forEach((key, value) -> value.init(req))
+        try:
+            from apps.system.tenant.service.tenant_data_init_service import TenantDataInitService
+            admin_user_id = await TenantDataInitService.init_tenant_data(tenant_id, req)
+
+            # 更新租户的admin_user字段
+            async with DatabaseSession.get_session_context() as session:
+                tenant_entity = await session.get(TenantEntity, tenant_id)
+                if tenant_entity:
+                    tenant_entity.admin_user = admin_user_id
+                    await session.commit()
+
+        except Exception as e:
+            # 如果初始化失败，删除已创建的租户
+            from apps.common.config.logging import get_logger
+            logger = get_logger(__name__)
+            logger.error(f"租户数据初始化失败，回滚租户创建: {e}", exc_info=True)
+
+            # 删除租户
+            async with DatabaseSession.get_session_context() as session:
+                tenant_to_delete = await session.get(TenantEntity, tenant_id)
+                if tenant_to_delete:
+                    await session.delete(tenant_to_delete)
+                    await session.commit()
+
+            raise BusinessException(f"租户创建失败: {str(e)}")
+
+        return tenant_id
 
     async def update(self, tenant_id: int, req: TenantReq) -> None:
         """

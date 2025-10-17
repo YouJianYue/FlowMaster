@@ -39,6 +39,9 @@ class RoleMenuEntity(Base):
         comment="菜单ID"
     )
 
+    # 租户ID - 对应参考项目的租户隔离字段
+    tenant_id: int = Column(BigInteger, nullable=False, default=0, index=True, comment="租户ID")
+
     # ==========================================
     # 关联关系定义 - 暂时注释避免循环引用
     # ==========================================

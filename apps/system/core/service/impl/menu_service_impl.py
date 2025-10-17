@@ -7,16 +7,26 @@
 from typing import List, Dict, Any
 from datetime import datetime
 from sqlalchemy import select, delete, func
+
 from apps.common.config.database.database_session import DatabaseSession
-from apps.system.core.service.menu_service import MenuService
-from apps.system.core.model.entity.menu_entity import MenuEntity
-from apps.system.core.model.req.menu_req import MenuReq
-from apps.system.core.model.resp.menu_resp import MenuResp
 from apps.common.config.logging.logging_config import get_logger
 from apps.common.enums.dis_enable_status_enum import DisEnableStatusEnum
+from apps.common.context.user_context_holder import UserContextHolder
+from apps.common.config.exception.global_exception_handler import BusinessException
+from apps.common.util.redis_utils import RedisUtils, CacheConstants
+
+from apps.system.core.service.menu_service import MenuService
+from apps.system.core.model.entity.menu_entity import MenuEntity
+from apps.system.core.model.entity.user_entity import UserEntity
+from apps.system.core.model.entity.user_role_entity import UserRoleEntity
+from apps.system.core.model.entity.role_menu_entity import RoleMenuEntity
+from apps.system.core.model.req.menu_req import MenuReq
+from apps.system.core.model.resp.menu_resp import MenuResp
+from apps.system.core.enums.menu_type_enum import MenuTypeEnum
+from apps.system.core.constant.system_constants import SystemConstants
+from apps.system.auth.service.role_permission_service import RolePermissionService
 
 logger = get_logger(__name__)
-
 
 class MenuServiceImpl(MenuService):
     """菜单服务实现（数据库驱动）"""
@@ -178,8 +188,6 @@ class MenuServiceImpl(MenuService):
         Returns:
             List[Dict[str, Any]]: 前端格式的菜单树
         """
-        from apps.system.core.model.resp.menu_resp import MenuResp
-
         result = []
 
         for menu in menu_tree:
@@ -213,9 +221,6 @@ class MenuServiceImpl(MenuService):
         Returns:
             MenuResp: 创建的菜单数据
         """
-        from apps.common.context.user_context_holder import UserContextHolder
-        from apps.system.core.enums.menu_type_enum import MenuTypeEnum
-
         async with DatabaseSession.get_session_context() as session:
             # 检查标题重复（一比一复刻参考项目 MenuServiceImpl.checkTitleRepeat()）
             await self._check_title_repeat(session, menu_req.title, menu_req.parent_id, None)
@@ -280,9 +285,6 @@ class MenuServiceImpl(MenuService):
         Returns:
             MenuResp: 更新的菜单数据
         """
-        from apps.common.context.user_context_holder import UserContextHolder
-        from apps.common.config.exception.global_exception_handler import BusinessException
-        from apps.system.core.enums.menu_type_enum import MenuTypeEnum
 
         async with DatabaseSession.get_session_context() as session:
             # 查询现有菜单
@@ -348,7 +350,6 @@ class MenuServiceImpl(MenuService):
             menu_id: 菜单ID
             status: 状态值（1=启用，2=禁用）
         """
-        from apps.common.context.user_context_holder import UserContextHolder
 
         async with DatabaseSession.get_session_context() as session:
             # 查询菜单
@@ -416,7 +417,6 @@ class MenuServiceImpl(MenuService):
         一比一复刻参考项目 MenuController.clearCache():
         RedisUtils.deleteByPattern(CacheConstants.ROLE_MENU_KEY_PREFIX + StringConstants.ASTERISK);
         """
-        from apps.common.util.redis_utils import RedisUtils, CacheConstants
 
         try:
             # 删除所有角色菜单缓存 ROLE_MENU:*
@@ -438,8 +438,6 @@ class MenuServiceImpl(MenuService):
         Returns:
             MenuResp: 菜单响应模型
         """
-        from apps.system.core.model.resp.menu_resp import MenuResp
-        from apps.system.core.model.entity.user_entity import UserEntity
 
         # 查询创建用户的昵称
         create_user_string = "未知用户"
@@ -516,26 +514,18 @@ class MenuServiceImpl(MenuService):
         """
         根据用户ID查询权限码集合
 
+        🔥 完全移除硬编码，调用RolePermissionService获取真实权限
+
         Args:
             user_id: 用户ID
 
         Returns:
             Set[str]: 权限码集合
         """
-        async with DatabaseSession.get_session_context() as session:
-            # 临时实现：假设用户ID=1是超级管理员，拥有所有权限
-            if user_id == 1:
-                # 超级管理员拥有所有权限
-                stmt = select(MenuEntity.permission).where(
-                    MenuEntity.permission.is_not(None),
-                    MenuEntity.status == DisEnableStatusEnum.ENABLE.value  # 使用.value比较int类型
-                )
-                result = await session.execute(stmt)
-                permissions = {row[0] for row in result.fetchall() if row[0]}
-                return permissions
 
-            # 其他用户返回基础权限
-            return {"system:user:list", "system:role:list", "system:menu:list"}
+        # 调用RolePermissionService获取用户权限（已包含租户隔离）
+        permissions = await RolePermissionService.list_permission_by_user_id(user_id)
+        return permissions
 
     async def list_by_user_id(self, user_id: int) -> List[Dict[str, Any]]:
         """
@@ -913,7 +903,6 @@ class MenuServiceImpl(MenuService):
         Raises:
             BusinessException: 标题重复时抛出
         """
-        from apps.common.config.exception.global_exception_handler import BusinessException
 
         # 构建查询条件：同一父菜单下，标题相同的菜单
         query = select(func.count(MenuEntity.id)).where(
@@ -944,8 +933,6 @@ class MenuServiceImpl(MenuService):
         Raises:
             BusinessException: 组件名称重复时抛出
         """
-        from apps.common.config.exception.global_exception_handler import BusinessException
-        from apps.system.core.enums.menu_type_enum import MenuTypeEnum
 
         if not name:
             return
@@ -965,7 +952,6 @@ class MenuServiceImpl(MenuService):
 
         if count > 0:
             raise BusinessException(f"组件名称为 [{name}] 的菜单已存在")
-
 
 # 全局服务实例
 menu_service = MenuServiceImpl()
