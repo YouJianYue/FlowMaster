@@ -32,9 +32,6 @@ async def get_user_page(
 ):
     """
     分页查询用户列表
-
-    一比一复刻参考项目 UserController
-    参考项目通过 @CrudRequestMapping 自动生成权限，这里手动添加
     """
     result = await user_service.get_user_page(
         dept_id=deptId,
@@ -56,10 +53,9 @@ async def get_user_dict(
     """
     查询用户字典列表
 
-    一比一复刻参考项目 UserController 的 Api.DICT 功能
     返回格式：[{"label": "用户昵称", "value": "用户ID"}, ...]
 
-    ⚠️ 注意：此路由必须在 /user/{user_id} 之前定义，否则会被匹配为路径参数
+    注意：此路由必须在 /user/{user_id} 之前定义，否则会被匹配为路径参数
     """
     result = await user_service.get_user_dict(status=status)
     return create_success_response(data=result)
@@ -73,8 +69,6 @@ async def get_user_detail(
 ):
     """
     获取用户详情
-
-    一比一复刻参考项目 UserController
     """
     result = await user_service.get_user_detail(user_id=user_id)
     return create_success_response(data=result)
@@ -90,9 +84,6 @@ async def update_user(
 ):
     """
     修改用户
-
-    一比一复刻参考项目 UserController.update()
-    使用 @require_permission 装饰器替代手动权限检查
     """
     await user_service.update_user(user_id, update_req)
     return create_success_response(data=True)
