@@ -11,6 +11,7 @@ from apps.system.core.model.resp.user_resp import UserResp
 from apps.system.core.model.resp.user_detail_resp import UserDetailResp
 from apps.system.core.model.req.user_req import UserUpdateReq
 from apps.system.core.model.req.user_role_update_req import UserRoleUpdateReq
+from apps.system.core.model.req.user_password_reset_req import UserPasswordResetReq
 from apps.common.models.page_resp import PageResp
 
 
@@ -90,6 +91,19 @@ class UserService(ABC):
 
         Args:
             update_req: 用户角色更新请求
+            user_id: 用户ID
+        """
+        pass
+
+    @abstractmethod
+    async def reset_password(self, reset_req: UserPasswordResetReq, user_id: Union[int, str]) -> None:
+        """
+        重置用户密码
+
+        一比一复刻参考项目 UserService.resetPassword()
+
+        Args:
+            reset_req: 密码重置请求
             user_id: 用户ID
         """
         pass

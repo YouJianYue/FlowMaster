@@ -47,9 +47,11 @@ class RolePermissionService:
             role_stmt = select(UserRoleEntity.role_id).where(UserRoleEntity.user_id == user_id)
 
             # 🔥 一比一复刻参考项目：添加租户隔离过滤
+            # 但是：对于默认租户（tenant_id=0），不添加租户过滤
+            # 因为默认租户应该能访问所有租户的数据
             if TenantContextHolder.isTenantEnabled():
                 tenant_id = TenantContextHolder.getTenantId()
-                if tenant_id is not None:
+                if tenant_id is not None and tenant_id != 0:
                     role_stmt = role_stmt.where(UserRoleEntity.tenant_id == tenant_id)
 
             role_result = await session.execute(role_stmt)
@@ -117,9 +119,11 @@ class RolePermissionService:
             )
 
             # 🔥 一比一复刻参考项目：添加租户隔离过滤
+            # 但是：对于默认租户（tenant_id=0），不添加租户过滤
+            # 因为默认租户应该能访问所有租户的数据
             if TenantContextHolder.isTenantEnabled():
                 tenant_id = TenantContextHolder.getTenantId()
-                if tenant_id is not None:
+                if tenant_id is not None and tenant_id != 0:
                     # 同时过滤RoleEntity和UserRoleEntity的tenant_id
                     role_stmt = role_stmt.where(
                         and_(

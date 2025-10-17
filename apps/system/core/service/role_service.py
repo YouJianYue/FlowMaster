@@ -93,9 +93,11 @@ class RoleService:
                 )
 
                 # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                # 但是：对于默认租户（tenant_id=0），不添加租户过滤
+                # 因为默认租户应该能访问所有租户的数据
                 if TenantContextHolder.isTenantEnabled():
                     tenant_id = TenantContextHolder.getTenantId()
-                    if tenant_id is not None:
+                    if tenant_id is not None and tenant_id != 0:
                         stmt = stmt.where(RoleEntity.tenant_id == tenant_id)
                         stmt = stmt.where(UserRoleEntity.tenant_id == tenant_id)
 
@@ -176,9 +178,11 @@ class RoleService:
                 )
 
                 # 🔥 一比一复刻参考项目：添加租户隔离过滤
+                # 但是：对于默认租户（tenant_id=0），不添加租户过滤
+                # 因为默认租户应该能访问所有租户的数据
                 if TenantContextHolder.isTenantEnabled():
                     tenant_id = TenantContextHolder.getTenantId()
-                    if tenant_id is not None:
+                    if tenant_id is not None and tenant_id != 0:
                         stmt = stmt.where(UserRoleEntity.tenant_id == tenant_id)
 
                 result = await session.execute(stmt)

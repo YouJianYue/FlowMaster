@@ -4,11 +4,13 @@
 """
 
 from typing import Optional, Union, List
-from sqlalchemy import select, or_, func, delete, and_
+from sqlalchemy import select, or_, func, delete, and_, update
+from datetime import datetime
 
 from ..user_service import UserService
 from apps.system.core.model.req.user_req import UserUpdateReq
 from apps.system.core.model.req.user_role_update_req import UserRoleUpdateReq
+from apps.system.core.model.req.user_password_reset_req import UserPasswordResetReq
 from apps.system.core.model.resp.user_resp import UserResp
 from apps.system.core.model.resp.user_detail_resp import UserDetailResp
 from apps.system.core.model.entity.user_entity import UserEntity
@@ -320,6 +322,46 @@ class UserServiceImpl(UserService):
 
         except Exception as e:
             self.logger.error(f"用户角色分配失败: {e}")
+            raise
+
+    async def reset_password(self, reset_req: UserPasswordResetReq, user_id: Union[int, str]) -> None:
+        """
+        重置用户密码 - 一比一复刻参考项目resetPassword方法
+
+        参考Java实现: UserServiceImpl.resetPassword()
+
+        Args:
+            reset_req: 密码重置请求
+            user_id: 用户ID
+        """
+        try:
+            async with DatabaseSession.get_session_context() as session:
+                # 1. 验证用户是否存在 - 对应参考项目 this.getById(id)
+                await self.get(user_id)
+
+                # 2. 对明文密码进行bcrypt哈希处理（Spring Security格式）
+                from apps.system.auth.config.jwt_config import PasswordConfig
+                bcrypt_hash = PasswordConfig.get_password_hash(reset_req.new_password)
+                # 添加Spring Security的{bcrypt}前缀，与数据库格式保持一致
+                spring_security_hash = f"{{bcrypt}}{bcrypt_hash}"
+
+                # 3. 更新密码和密码重置时间 - 对应参考项目 baseMapper.lambdaUpdate()
+                stmt = (
+                    update(UserEntity)
+                    .where(UserEntity.id == int(user_id))
+                    .values(
+                        password=spring_security_hash,  # 存储Spring Security格式的bcrypt哈希密码
+                        pwd_reset_time=datetime.now()
+                    )
+                )
+
+                await session.execute(stmt)
+                await session.commit()
+
+                self.logger.info(f"用户密码重置成功: 用户ID={user_id}")
+
+        except Exception as e:
+            self.logger.error(f"用户密码重置失败: {e}")
             raise
 
     async def delete(self, ids: List[Union[int, str]]):

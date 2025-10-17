@@ -44,8 +44,14 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         中间件处理逻辑
         """
         try:
+            # 🔥 调试日志：记录所有请求
+            import logging
+            logger = logging.getLogger("JWTAuthMiddleware")
+            logger.debug(f"[调试] JWT中间件开始处理: path={request.url.path}")
+
             # 检查是否需要认证
             if not self._should_authenticate(request):
+                logger.debug(f"[调试] 路径无需认证，跳过JWT验证: path={request.url.path}")
                 response = await call_next(request)
                 return response
 
@@ -80,6 +86,13 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             # 设置用户上下文
             await self._set_user_context(payload, request)
 
+            # 🔥 调试日志：确认用户上下文设置成功
+            current_user_context = UserContextHolder.get_context()
+            if current_user_context:
+                logger.debug(f"[调试] JWT中间件设置用户上下文成功: user_id={current_user_context.id}, permissions_count={len(current_user_context.permissions)}")
+            else:
+                logger.warning(f"[调试] JWT中间件设置用户上下文失败：上下文为空")
+
             # 继续处理请求
             response = await call_next(request)
             return response
@@ -88,9 +101,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             return self._create_error_response(e.status_code, e.detail)
         except Exception:
             return self._create_error_response(500, "内部服务器错误")
-        finally:
-            # 清理上下文
-            UserContextHolder.clear_context()
+        # 注意：不在这里清理上下文，让TenantMiddleware来清理
+        # 因为TenantMiddleware是内层中间件，会在JWT中间件之后才完成
     
     def _should_authenticate(self, request: Request) -> bool:
         """
@@ -219,12 +231,18 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # 从 Token 中的 tenant_id 设置租户上下文
         # TenantMiddleware 会在后面执行，如果请求头有 X-Tenant-Code 会覆盖这个设置
         from apps.common.context.tenant_context_holder import TenantContextHolder
-        if user_context.tenant_id:
+
+        # 调试日志：记录从Token设置租户上下文
+        import logging
+        logger = logging.getLogger("JWTAuthMiddleware")
+        logger.debug(f"[调试] JWT准备设置租户上下文: tenant_id={user_context.tenant_id}")
+
+        # 🔥 修复：tenant_id可能为0（默认租户），不能用if直接判断
+        if user_context.tenant_id is not None:
             TenantContextHolder.setTenantId(user_context.tenant_id)
-            # 调试日志：记录从Token设置租户上下文
-            import logging
-            logger = logging.getLogger("JWTAuthMiddleware")
-            logger.debug(f"[调试] JWT中间件设置租户上下文: tenant_id={user_context.tenant_id}, user_id={user_id}, username={username}")
+            logger.debug(f"[调试] JWT中间件设置租户上下文成功: tenant_id={user_context.tenant_id}, user_id={user_id}, username={username}")
+        else:
+            logger.warning(f"[调试] JWT中的tenant_id为None，不设置租户上下文")
 
         # 设置用户额外信息
         from datetime import datetime

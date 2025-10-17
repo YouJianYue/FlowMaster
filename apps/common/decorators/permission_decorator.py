@@ -11,7 +11,6 @@ from functools import wraps
 from typing import Callable, Union, List
 from fastapi import HTTPException, status, Request, Depends
 from apps.common.context.user_context_holder import UserContextHolder
-from apps.system.core.service.menu_service import get_menu_service
 from apps.common.config.logging.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -44,12 +43,9 @@ class PermissionChecker:
                 logger.debug(f"超级管理员 {user_context.username} 通过权限检查: {permission}")
                 return True
 
-            # 获取用户权限列表
-            menu_service = get_menu_service()
-            user_permissions = await menu_service.list_permission_by_user_id(user_context.id)
-
-            # 转换为权限集合
-            user_permission_set = set(user_permissions)
+            # 🔥 性能优化：直接使用UserContext中已缓存的权限，避免重复查询数据库
+            # JWT中间件在用户登录时已经查询并缓存了权限到UserContext
+            user_permission_set = user_context.permissions if user_context.permissions else set()
 
             # 处理权限检查
             if isinstance(permission, str):

@@ -73,8 +73,12 @@ class TenantMiddleware(BaseHTTPMiddleware):
                 # 只有在还没有设置时，才使用默认租户
                 existing_tenant_id = TenantContextHolder.getTenantId()
                 logger.debug(f"[调试] 请求头无租户编码，检查现有租户上下文: existing_tenant_id={existing_tenant_id}")
-                if existing_tenant_id is None:
-                    # 未指定租户编码且没有从Token设置，使用默认租户
+
+                # 🔥 修复：检查existing_tenant_id是否为默认租户0
+                # 如果JWT已经设置了真实租户ID（!= 0），应该保持不变
+                # 如果JWT没有设置或设置为0，才使用默认租户
+                if existing_tenant_id is None or existing_tenant_id == 0:
+                    # 未指定租户编码且没有从Token设置真实租户ID，使用默认租户
                     TenantContextHolder.setTenantId(self.tenant_properties.default_tenant_id)
                     logger.debug(f"[调试] 使用默认租户: tenant_id={self.tenant_properties.default_tenant_id}")
                 else:
