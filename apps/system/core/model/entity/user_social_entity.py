@@ -6,10 +6,10 @@
 
 from typing import Optional
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 
 
-class UserSocialEntity(BaseEntity):
+class UserSocialEntity(TenantBaseEntity):
     """
     用户第三方关联实体
 

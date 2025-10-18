@@ -6,10 +6,10 @@
 
 from typing import Optional
 from sqlalchemy import Column, String, Integer, DateTime, Text, Boolean
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 
 
-class NoticeEntity(BaseEntity):
+class NoticeEntity(TenantBaseEntity):
     """
     公告实体
 

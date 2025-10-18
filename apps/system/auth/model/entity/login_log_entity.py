@@ -6,11 +6,11 @@
 
 from datetime import datetime, UTC
 from sqlalchemy import Column, String, DateTime, Boolean, Text, Integer
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 from apps.system.auth.enums.auth_enums import AuthTypeEnum
 
 
-class LoginLogEntity(BaseEntity):
+class LoginLogEntity(TenantBaseEntity):
     """登录日志实体类"""
     
     __tablename__: str = "sys_login_log"

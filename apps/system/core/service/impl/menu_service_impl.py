@@ -67,12 +67,17 @@ class MenuServiceImpl(MenuService):
         """
         获取菜单树（从数据库）
 
+        一比一复刻参考项目MenuServiceImpl.tree()的租户过滤逻辑
+
         Args:
             only_enabled: 是否仅获取启用的菜单
 
         Returns:
             List[Dict[str, Any]]: 菜单树数据
         """
+        from apps.common.context.tenant_context_holder import TenantContextHolder
+        from apps.common.config.tenant_extension_properties import get_tenant_extension_properties
+
         async with DatabaseSession.get_session_context() as session:
             # 构建查询条件
             query = select(MenuEntity).order_by(MenuEntity.sort, MenuEntity.id)
@@ -80,9 +85,27 @@ class MenuServiceImpl(MenuService):
             if only_enabled:
                 query = query.where(MenuEntity.status == DisEnableStatusEnum.ENABLE.value)
 
+            # 一比一复刻参考项目的租户过滤逻辑
+            # if (TenantContextHolder.isTenantEnabled() && !tenantExtensionProperties.isDefaultTenant())
+            tenant_properties = get_tenant_extension_properties()
+            tenant_enabled = TenantContextHolder.isTenantEnabled()
+            is_default_tenant = tenant_properties.is_default_tenant()
+            current_tenant_id = TenantContextHolder.getTenantId()
+
+            logger.debug(f"菜单树租户过滤检查: tenant_enabled={tenant_enabled}, is_default_tenant={is_default_tenant}, current_tenant_id={current_tenant_id}")
+
+            if tenant_enabled and not is_default_tenant:
+                # 获取租户不能访问的菜单ID列表
+                exclude_menu_ids = await self.list_exclude_tenant_menu()
+                logger.debug(f"租户排除菜单ID列表: {exclude_menu_ids}, 数量: {len(exclude_menu_ids) if exclude_menu_ids else 0}")
+                if exclude_menu_ids:
+                    query = query.where(MenuEntity.id.notin_(exclude_menu_ids))
+
             # 执行查询
             result = await session.execute(query)
             menus = result.scalars().all()
+
+            logger.debug(f"查询到的菜单数量: {len(menus)}")
 
             # 转换为字典格式（使用公共方法）
             menu_list = [self._entity_to_dict(menu) for menu in menus]
@@ -952,6 +975,47 @@ class MenuServiceImpl(MenuService):
 
         if count > 0:
             raise BusinessException(f"组件名称为 [{name}] 的菜单已存在")
+
+    async def list_exclude_tenant_menu(self) -> List[int]:
+        """
+        查询租户不能访问的菜单ID列表
+
+        一比一复刻参考项目MenuServiceImpl.listExcludeTenantMenu():
+        - 获取所有菜单ID列表
+        - 获取租户管理员角色的菜单ID列表
+        - 返回差集（所有菜单 - 租户管理员菜单 = 租户不能访问的菜单）
+
+        Returns:
+            List[int]: 租户不能访问的菜单ID列表
+        """
+        from apps.common.enums.role_code_enum import RoleCodeEnum
+        from apps.system.core.service.role_service import get_role_service
+
+        try:
+            # 获取租户管理员角色
+            role_service = get_role_service()
+            tenant_admin_role = await role_service.get_role_by_code(RoleCodeEnum.TENANT_ADMIN.value)
+
+            if not tenant_admin_role:
+                logger.warning("租户管理员角色不存在，返回空的排除列表")
+                return []
+
+            # 获取所有菜单ID列表
+            all_menus = await self.list_all_menus()
+            all_menu_ids = [menu.get("id") for menu in all_menus]
+
+            # 获取租户管理员角色可访问的菜单ID列表
+            tenant_admin_menu_ids = await role_service.get_role_menu_ids(tenant_admin_role.id)
+
+            # 计算差集：所有菜单 - 租户管理员菜单 = 租户不能访问的菜单
+            exclude_menu_ids = list(set(all_menu_ids) - set(tenant_admin_menu_ids))
+
+            logger.debug(f"租户排除菜单数量: {len(exclude_menu_ids)}")
+            return exclude_menu_ids
+
+        except Exception as e:
+            logger.error(f"获取租户排除菜单失败: {e}", exc_info=True)
+            return []
 
 # 全局服务实例
 menu_service = MenuServiceImpl()

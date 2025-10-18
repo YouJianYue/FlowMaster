@@ -5,10 +5,10 @@
 """
 
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 
 
-class UserPasswordHistoryEntity(BaseEntity):
+class UserPasswordHistoryEntity(TenantBaseEntity):
     """
     用户历史密码实体
 

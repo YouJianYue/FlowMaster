@@ -6,10 +6,10 @@
 
 
 from sqlalchemy import Column, String, DateTime, Integer, Text
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 
 
-class UserSocialEntity(BaseEntity):
+class UserSocialEntity(TenantBaseEntity):
     """用户第三方账号关联实体类"""
     
     __tablename__ = "sys_user_social"

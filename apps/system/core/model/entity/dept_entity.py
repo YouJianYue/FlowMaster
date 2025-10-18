@@ -6,10 +6,10 @@
 
 from typing import Optional, List
 from sqlalchemy import Column, String, BigInteger, Boolean, Integer, Index
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 
 
-class DeptEntity(BaseEntity):
+class DeptEntity(TenantBaseEntity):
     """
     部门实体
 
@@ -53,11 +53,6 @@ class DeptEntity(BaseEntity):
     # 是否为系统内置数据 - 对应参考项目的is_system字段
     is_system: bool = Column(
         Boolean, nullable=False, default=False, comment="是否为系统内置数据"
-    )
-
-    # 租户ID - 对应参考项目的租户隔离字段
-    tenant_id: int = Column(
-        BigInteger, nullable=False, default=0, index=True, comment="租户ID"
     )
 
     # ==========================================

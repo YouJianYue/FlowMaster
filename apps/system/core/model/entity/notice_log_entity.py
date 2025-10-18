@@ -41,5 +41,8 @@ class NoticeLogEntity(Base):
     # 读取时间
     read_time: Optional[DateTime] = Column(DateTime, nullable=True, comment="读取时间")
 
+    # 租户ID - 租户隔离字段
+    tenant_id: int = Column(Integer, nullable=False, default=0, index=True, comment="租户ID")
+
     def __repr__(self) -> str:
         return f"<NoticeLogEntity(notice_id={self.notice_id}, user_id={self.user_id})>"

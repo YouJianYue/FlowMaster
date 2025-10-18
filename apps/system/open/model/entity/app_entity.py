@@ -8,10 +8,10 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, BigInteger, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 
 
-class AppEntity(BaseEntity):
+class AppEntity(TenantBaseEntity):
     """
     应用实体
 

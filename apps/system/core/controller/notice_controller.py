@@ -7,7 +7,7 @@
 @since: 2025/9/26
 """
 
-from typing import List, Optional
+from typing import List, Optional, Union
 from fastapi import APIRouter, HTTPException, Query, Path, Depends, Body
 
 from apps.common.models.api_response import ApiResponse, create_success_response
@@ -69,7 +69,7 @@ async def page_notices(
             response_model=ApiResponse[NoticeDetailResp],
             summary="查询公告详情")
 async def get_notice(
-    notice_id: int = Path(..., description="公告ID", example=1),
+    notice_id: Union[int, str] = Path(..., description="公告ID", example="1"),
     notice_service: NoticeService = Depends(get_notice_service)
 ):
     """
@@ -78,17 +78,23 @@ async def get_notice(
     一比一复刻参考项目 CrudApi.GET 功能
 
     Args:
-        notice_id: 公告ID
+        notice_id: 公告ID（支持int或string类型，自动转换）
         notice_service: 公告服务（依赖注入）
 
     Returns:
         ApiResponse[NoticeDetailResp]: 公告详情
     """
     try:
-        logger.info(f"查询公告详情: notice_id={notice_id}")
+        # 转换ID为整数
+        try:
+            notice_id_int = int(notice_id)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail=f"无效的公告ID: {notice_id}")
+
+        logger.info(f"查询公告详情: notice_id={notice_id_int}")
 
         # 调用服务查询
-        notice_detail = await notice_service.get(notice_id)
+        notice_detail = await notice_service.get(notice_id_int)
 
         if not notice_detail:
             raise HTTPException(status_code=404, detail="公告不存在")

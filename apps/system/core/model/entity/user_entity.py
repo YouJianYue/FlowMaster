@@ -9,12 +9,12 @@ from datetime import datetime
 from pydantic import ConfigDict
 from sqlalchemy import Column, String, BigInteger, Text, Boolean, DateTime
 # 暂时移除relationship，避免循环引用问题
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 from apps.common.enums.dis_enable_status_enum import DisEnableStatusEnum
 from apps.common.enums.gender_enum import GenderEnum
 
 
-class UserEntity(BaseEntity):
+class UserEntity(TenantBaseEntity):
     """
     用户实体
 
@@ -59,9 +59,6 @@ class UserEntity(BaseEntity):
 
     # 部门ID
     dept_id: Optional[int] = Column(BigInteger, nullable=True, comment="部门ID")
-
-    # 租户ID - 对应参考项目的租户隔离字段
-    tenant_id: int = Column(BigInteger, nullable=False, default=0, index=True, comment="租户ID")
 
     # ==========================================
     # 关联关系定义 - 暂时删除，等基本功能稳定后再添加

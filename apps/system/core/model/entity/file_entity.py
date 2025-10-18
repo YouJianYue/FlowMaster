@@ -6,10 +6,10 @@
 
 from typing import Optional
 from sqlalchemy import Column, String, Integer, BigInteger, Text, ForeignKey
-from apps.common.base.model.entity.base_entity import BaseEntity
+from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 
 
-class FileEntity(BaseEntity):
+class FileEntity(TenantBaseEntity):
     """
     文件实体
 
