@@ -7,7 +7,7 @@
 from typing import Optional
 from datetime import datetime
 from pydantic import ConfigDict
-from sqlalchemy import Column, String, BigInteger, Text, Boolean, DateTime
+from sqlalchemy import Column, String, BigInteger, SmallInteger, Text, Boolean, DateTime
 # 暂时移除relationship，避免循环引用问题
 from apps.common.base.model.entity.tenant_base_entity import TenantBaseEntity
 from apps.common.enums.dis_enable_status_enum import DisEnableStatusEnum
@@ -33,8 +33,9 @@ class UserEntity(TenantBaseEntity):
     # 密码（加密存储）
     password: str = Column(String(255), nullable=False, comment="密码")
 
-    # 性别
-    gender: GenderEnum = Column(String(20), nullable=True, default=GenderEnum.UNKNOWN.value, comment="性别")
+    # 性别：0=未知, 1=男, 2=女
+    # 数据库字段类型: tinyint
+    gender: int = Column(SmallInteger, nullable=True, default=0, comment="性别(0=未知,1=男,2=女)")
 
     # 邮箱（可加密存储）
     email: Optional[str] = Column(String(255), nullable=True, comment="邮箱")
@@ -48,8 +49,9 @@ class UserEntity(TenantBaseEntity):
     # 描述
     description: Optional[str] = Column(Text, nullable=True, comment="描述")
 
-    # 状态（启用/禁用）
-    status: DisEnableStatusEnum = Column(String(10), nullable=False, default=DisEnableStatusEnum.ENABLE.value, comment="状态")
+    # 状态：1=启用, 2=禁用
+    # 数据库字段类型: tinyint
+    status: int = Column(SmallInteger, nullable=False, default=1, comment="状态(1=启用,2=禁用)")
 
     # 是否为系统内置数据
     is_system: bool = Column(Boolean, nullable=False, default=False, comment="是否为系统内置数据")
@@ -94,7 +96,7 @@ class UserEntity(TenantBaseEntity):
     
     def is_enabled(self) -> bool:
         """检查用户是否启用"""
-        return self.status == DisEnableStatusEnum.ENABLE
+        return self.status == 1  # 1=启用, 2=禁用
     
     def is_system_user(self) -> bool:
         """检查是否为系统内置用户"""

@@ -7,7 +7,7 @@
 import httpx
 from typing import Dict, Any, Optional
 from apps.system.auth.config.oauth_config import OAuthConfig
-from apps.common.exceptions import BadRequestException
+from apps.common.config.exception.global_exception_handler import BadRequestException
 
 
 class WeComOAuthClient:

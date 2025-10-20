@@ -32,7 +32,7 @@ from apps.system.core.model.entity.storage_entity import StorageEntity  # noqa: 
 
 # 扩展功能表（10个）
 from apps.system.core.model.entity.user_password_history_entity import UserPasswordHistoryEntity  # noqa: F401
-from apps.system.core.model.entity.user_social_entity import UserSocialEntity  # noqa: F401
+from apps.system.auth.model.entity.user_social_entity import UserSocialEntity  # noqa: F401
 from apps.system.core.model.entity.log_entity import LogEntity  # noqa: F401
 from apps.system.core.model.entity.message_entity import MessageEntity  # noqa: F401
 from apps.system.core.model.entity.message_log_entity import MessageLogEntity  # noqa: F401

@@ -214,56 +214,87 @@ class AuthService:
         Returns:
             SocialAuthAuthorizeResp: 授权响应
         """
-        # 校验客户端
-        await self.client_service.validate_client(client_id, AuthTypeEnum.SOCIAL.value)
+        from apps.common.config.logging import get_logger
+        logger = get_logger(__name__)
 
-        # 根据不同平台生成授权URL
-        import uuid
-        from apps.system.auth.enums.auth_enums import SocialSourceEnum
+        try:
+            logger.info(f"🔥 [开始] 获取第三方登录授权地址: source={source}, client_id={client_id}")
 
-        state = str(uuid.uuid4())  # 生成随机state防止CSRF攻击
+            # 校验客户端
+            logger.info(f"🔥 [步骤1] 开始校验客户端...")
+            await self.client_service.validate_client(client_id, AuthTypeEnum.SOCIAL.value)
+            logger.info(f"🔥 [步骤1] 客户端校验通过")
 
-        if source == SocialSourceEnum.WECOM.value:
-            # 企业微信OAuth
-            from apps.system.auth.oauth.wecom_oauth import WeComOAuthClient
+            # 根据不同平台生成授权URL
+            import uuid
+            from apps.system.auth.enums.auth_enums import SocialSourceEnum
 
-            wecom_client = WeComOAuthClient()
-            authorize_url = wecom_client.get_authorize_url(state)
+            state = str(uuid.uuid4())  # 生成随机state防止CSRF攻击
+            logger.info(f"🔥 [步骤2] 生成state: {state}")
 
-        elif source == SocialSourceEnum.GITEE.value:
-            # Gitee OAuth
-            # TODO: 实现Gitee OAuth
-            from apps.system.auth.config.oauth_config import OAuthConfig
+            if source == SocialSourceEnum.DINGTALK.value:
+                # 钉钉开放平台OAuth
+                logger.info(f"🔥 [步骤3] 开始获取钉钉授权URL...")
+                from apps.system.auth.oauth.dingtalk_oauth import DingTalkOAuthClient
 
-            config = OAuthConfig.get_config(source)
-            authorize_url = (
-                f"https://gitee.com/oauth/authorize"
-                f"?client_id={config.get('client_id')}"
-                f"&redirect_uri={config.get('redirect_uri')}"
-                f"&response_type=code"
-                f"&state={state}"
-            )
+                dingtalk_client = DingTalkOAuthClient()
+                logger.info(f"🔥 [步骤3] DingTalkOAuthClient实例化成功")
 
-        elif source == SocialSourceEnum.GITHUB.value:
-            # GitHub OAuth
-            # TODO: 实现GitHub OAuth
-            from apps.system.auth.config.oauth_config import OAuthConfig
+                authorize_url = dingtalk_client.get_authorize_url(state)
+                logger.info(f"🔥 [步骤3] 钉钉授权URL获取成功: {authorize_url}")
 
-            config = OAuthConfig.get_config(source)
-            authorize_url = (
-                f"https://github.com/login/oauth/authorize"
-                f"?client_id={config.get('client_id')}"
-                f"&redirect_uri={config.get('redirect_uri')}"
-                f"&response_type=code"
-                f"&state={state}"
-            )
+            elif source == SocialSourceEnum.WECOM.value:
+                # 企业微信OAuth
+                logger.info(f"🔥 [步骤3] 开始获取企业微信授权URL...")
+                from apps.system.auth.oauth.wecom_oauth import WeComOAuthClient
 
-        else:
-            from apps.common.exceptions import BadRequestException
+                wecom_client = WeComOAuthClient()
+                authorize_url = wecom_client.get_authorize_url(state)
 
-            raise BadRequestException(f"暂不支持 [{source}] 平台账号登录")
+            elif source == SocialSourceEnum.GITEE.value:
+                # Gitee OAuth
+                logger.info(f"🔥 [步骤3] 开始获取Gitee授权URL...")
+                from apps.system.auth.config.oauth_config import OAuthConfig
 
-        return SocialAuthAuthorizeResp(authorize_url=authorize_url)
+                config = OAuthConfig.get_config(source)
+                authorize_url = (
+                    f"https://gitee.com/oauth/authorize"
+                    f"?client_id={config.get('client_id')}"
+                    f"&redirect_uri={config.get('redirect_uri')}"
+                    f"&response_type=code"
+                    f"&state={state}"
+                )
+
+            elif source == SocialSourceEnum.GITHUB.value:
+                # GitHub OAuth
+                logger.info(f"🔥 [步骤3] 开始获取GitHub授权URL...")
+                from apps.system.auth.config.oauth_config import OAuthConfig
+
+                config = OAuthConfig.get_config(source)
+                authorize_url = (
+                    f"https://github.com/login/oauth/authorize"
+                    f"?client_id={config.get('client_id')}"
+                    f"&redirect_uri={config.get('redirect_uri')}"
+                    f"&response_type=code"
+                    f"&state={state}"
+                )
+
+            else:
+                from apps.common.config.exception.global_exception_handler import BadRequestException
+                logger.error(f"🔥 [错误] 不支持的平台: {source}")
+                raise BadRequestException(f"暂不支持 [{source}] 平台账号登录")
+
+            logger.info(f"🔥 [步骤4] 创建响应对象...")
+            result = SocialAuthAuthorizeResp(authorize_url=authorize_url)
+            logger.info(f"🔥 [完成] 成功返回授权URL: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"🔥 [异常] 获取授权URL失败: {type(e).__name__}: {str(e)}", exc_info=True)
+            print(f"🔥🔥🔥 异常详情: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     async def bind_social_account(self, request: SocialLoginReq) -> bool:
         """

@@ -126,16 +126,8 @@ async def get_user_info(
         ApiResponse[UserInfoResp]: 用户信息（包含权限列表）
     """
     try:
-        # 调试日志：记录请求开始时的用户和租户上下文
-        import logging
-        logger = logging.getLogger("AuthController")
-        from apps.common.context.tenant_context_holder import TenantContextHolder
-        current_tenant_id = TenantContextHolder.getTenantId()
-        logger.debug(f"[调试] get_user_info开始 - user_id={user_context.id}, username={user_context.username}, tenant_id={current_tenant_id}")
-
         # 获取用户详细信息（自动处理用户不存在的情况）
         user_detail = await user_service.get(user_context.id)
-        logger.debug(f"[调试] 获取用户详情成功: user_id={user_detail.id}, username={user_detail.username}")
 
         # 获取用户权限和角色
         permissions = await role_service.list_permissions_by_user_id(user_context.id)

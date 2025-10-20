@@ -9,7 +9,7 @@ import httpx
 from typing import Dict, Any
 from urllib.parse import quote
 from apps.system.auth.config.oauth_config import OAuthConfig
-from apps.common.exceptions import BadRequestException
+from apps.common.config.exception.global_exception_handler import BadRequestException
 
 
 class DingTalkOAuthClient:
