@@ -206,24 +206,64 @@ class AuthService:
     async def get_social_authorize_url(self, source: str, client_id: str) -> SocialAuthAuthorizeResp:
         """
         获取第三方登录授权地址
-        
+
         Args:
             source: 第三方平台来源
             client_id: 客户端ID
-            
+
         Returns:
             SocialAuthAuthorizeResp: 授权响应
         """
         # 校验客户端
         await self.client_service.validate_client(client_id, AuthTypeEnum.SOCIAL.value)
-        
-        # TODO: 实现第三方登录授权地址生成逻辑
-        # 这里应该根据source生成对应平台的OAuth授权URL
-        authorize_url = f"https://oauth.{source}.com/authorize?client_id={client_id}&response_type=code"
-        
-        return SocialAuthAuthorizeResp(
-            authorize_url=authorize_url
-        )
+
+        # 根据不同平台生成授权URL
+        import uuid
+        from apps.system.auth.enums.auth_enums import SocialSourceEnum
+
+        state = str(uuid.uuid4())  # 生成随机state防止CSRF攻击
+
+        if source == SocialSourceEnum.WECOM.value:
+            # 企业微信OAuth
+            from apps.system.auth.oauth.wecom_oauth import WeComOAuthClient
+
+            wecom_client = WeComOAuthClient()
+            authorize_url = wecom_client.get_authorize_url(state)
+
+        elif source == SocialSourceEnum.GITEE.value:
+            # Gitee OAuth
+            # TODO: 实现Gitee OAuth
+            from apps.system.auth.config.oauth_config import OAuthConfig
+
+            config = OAuthConfig.get_config(source)
+            authorize_url = (
+                f"https://gitee.com/oauth/authorize"
+                f"?client_id={config.get('client_id')}"
+                f"&redirect_uri={config.get('redirect_uri')}"
+                f"&response_type=code"
+                f"&state={state}"
+            )
+
+        elif source == SocialSourceEnum.GITHUB.value:
+            # GitHub OAuth
+            # TODO: 实现GitHub OAuth
+            from apps.system.auth.config.oauth_config import OAuthConfig
+
+            config = OAuthConfig.get_config(source)
+            authorize_url = (
+                f"https://github.com/login/oauth/authorize"
+                f"?client_id={config.get('client_id')}"
+                f"&redirect_uri={config.get('redirect_uri')}"
+                f"&response_type=code"
+                f"&state={state}"
+            )
+
+        else:
+            from apps.common.exceptions import BadRequestException
+
+            raise BadRequestException(f"暂不支持 [{source}] 平台账号登录")
+
+        return SocialAuthAuthorizeResp(authorize_url=authorize_url)
     
     async def bind_social_account(self, request: SocialLoginReq) -> bool:
         """

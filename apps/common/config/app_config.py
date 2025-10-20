@@ -21,8 +21,8 @@ class AppConfig(BaseSettings):
 
     # JWT认证中间件配置
     jwt_exclude_paths: str = Field(
-        default="/docs,/redoc,/openapi.json,/health,/db/status,/auth/login,/auth/refresh,/auth/check,/auth/social/authorize,/captcha,/captcha/**,/system/common/dict/**,/common/dict/**,/tenant/common/**,/*.html,/*/*.html,/*/*.css,/*/*.js,/favicon.ico,/websocket/**,/file/**,/",
-        description="JWT认证排除路径（用逗号分隔）"
+        default="",
+        description="JWT认证排除路径（用逗号分隔），留空则使用最小安全配置"
     )
 
     # 应用服务配置
@@ -60,6 +60,32 @@ class AppConfig(BaseSettings):
     @property
     def jwt_exclude_paths_list(self) -> List[str]:
         """获取JWT排除路径列表"""
+        if not self.jwt_exclude_paths.strip():
+            # 如果未配置，返回最小安全配置（一比一复刻参考项目的security.excludes）
+            return [
+                "/docs",
+                "/redoc",
+                "/openapi.json",
+                "/health",
+                "/db/status",
+                "/auth/login",
+                "/auth/refresh",
+                "/auth/check",
+                "/auth/social/authorize/*",  # 第三方登录授权
+                "/captcha",
+                "/captcha/**",
+                "/system/common/dict/**",
+                "/common/dict/**",
+                "/tenant/common/**",
+                "/*.html",
+                "/*/*.html",
+                "/*/*.css",
+                "/*/*.js",
+                "/favicon.ico",
+                "/websocket/**",
+                "/file/**",
+                "/",
+            ]
         return [path.strip() for path in self.jwt_exclude_paths.split(",") if path.strip()]
 
 

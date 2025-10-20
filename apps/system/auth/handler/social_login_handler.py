@@ -64,70 +64,96 @@ class SocialLoginHandler(AbstractLoginHandler):
     async def _get_social_user_info(self, source: str, code: str, state: str) -> Dict[str, Any]:
         """
         获取第三方用户信息
-        
+
         Args:
             source: 第三方平台
             code: 授权码
             state: 状态码
-            
+
         Returns:
             Dict[str, Any]: 第三方用户信息
         """
-        # TODO: 实现各种第三方平台的OAuth获取用户信息
-        # 这里返回模拟数据
-        if source == SocialSourceEnum.GITEE.value:
+        # 根据不同平台获取用户信息
+        if source == SocialSourceEnum.DINGTALK.value:
+            # 钉钉OAuth
+            from apps.system.auth.oauth.dingtalk_oauth import DingTalkOAuthClient
+
+            dingtalk_client = DingTalkOAuthClient()
+            user_info = await dingtalk_client.get_user_info(code)
+            return user_info
+
+        elif source == SocialSourceEnum.WECHAT.value:
+            # 微信开放平台OAuth
+            from apps.system.auth.oauth.wechat_oauth import WeChatOAuthClient
+
+            wechat_client = WeChatOAuthClient()
+            user_info = await wechat_client.get_user_info(code)
+            return user_info
+
+        elif source == SocialSourceEnum.GITEE.value:
+            # Gitee OAuth
+            # TODO: 实现Gitee OAuth用户信息获取
             return {
-                "social_id": "123456",
+                "open_id": "123456",
                 "username": "gitee_user",
                 "nickname": "Gitee用户",
                 "avatar": "https://gitee.com/avatar.jpg",
                 "email": "user@gitee.com",
-                "source": source
+                "source": source,
             }
+
         elif source == SocialSourceEnum.GITHUB.value:
+            # GitHub OAuth
+            # TODO: 实现GitHub OAuth用户信息获取
             return {
-                "social_id": "654321",
-                "username": "github_user", 
+                "open_id": "654321",
+                "username": "github_user",
                 "nickname": "GitHub用户",
                 "avatar": "https://github.com/avatar.jpg",
                 "email": "user@github.com",
-                "source": source
+                "source": source,
             }
+
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"不支持的第三方平台: {source}"
+                detail=f"不支持的第三方平台: {source}",
             )
     
     async def _find_or_create_user(self, social_user_info: Dict[str, Any], source: str) -> Dict[str, Any]:
         """
         查找或创建本地用户
-        
+
         Args:
             social_user_info: 第三方用户信息
             source: 第三方平台
-            
+
         Returns:
             Dict[str, Any]: 本地用户数据
         """
-        # TODO: 实现查找或创建用户的逻辑
-        # 1. 先根据第三方ID查找是否已绑定本地用户
-        # 2. 如果没有，根据邮箱查找是否存在本地用户进行绑定
-        # 3. 如果都没有，创建新用户
-        
-        # 这里返回模拟数据
+        # TODO: 实现查找或创建用户的数据库逻辑
+        # 参考Java项目的SocialLoginHandler实现:
+        # 1. 根据source和open_id查询sys_user_social表
+        # 2. 如果找到，返回关联的用户信息
+        # 3. 如果没找到:
+        #    - 根据username/email查找是否存在本地用户
+        #    - 如果不存在，创建新用户并分配普通用户角色
+        #    - 创建sys_user_social关联记录
+        # 4. 更新UserSocial的meta_json和last_login_time
+
+        # 暂时返回模拟数据作为骨架
         return {
             "id": 3,
             "username": social_user_info["username"],
             "nickname": social_user_info["nickname"],
             "email": social_user_info.get("email"),
-            "phone": None,
+            "phone": social_user_info.get("mobile"),
             "avatar": social_user_info.get("avatar"),
             "status": 1,  # 启用状态
             "dept_id": None,
             "tenant_id": 1,
             "social_source": source,
-            "social_id": social_user_info["social_id"]
+            "open_id": social_user_info["open_id"],
         }
     
     @property

@@ -6,6 +6,7 @@
 
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
 class LoginResp(BaseModel):
@@ -59,7 +60,11 @@ class LoginResp(BaseModel):
         description="用户信息"
     )
     
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        alias_generator=to_camel
+    )
 
 
 class UserInfoResp(BaseModel):
@@ -135,7 +140,11 @@ class UserInfoResp(BaseModel):
         json_schema_extra={"example": False}
     )
     
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        alias_generator=to_camel
+    )
 
 
 class RefreshTokenResp(BaseModel):
@@ -162,7 +171,11 @@ class RefreshTokenResp(BaseModel):
         json_schema_extra={"example": 86400}
     )
     
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        alias_generator=to_camel
+    )
 
 
 class SocialAuthAuthorizeResp(BaseModel):
@@ -175,4 +188,8 @@ class SocialAuthAuthorizeResp(BaseModel):
         examples=["https://gitee.com/oauth/authorize?client_id=xxx&redirect_uri=xxx&response_type=code"]
     )
     
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        alias_generator=to_camel
+    )

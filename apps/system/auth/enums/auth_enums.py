@@ -38,19 +38,25 @@ class LoginStatusEnum(str, Enum):
 
 class SocialSourceEnum(str, Enum):
     """第三方平台枚举"""
-    
+
+    # 钉钉 DingTalk
+    DINGTALK = "dingtalk"
+
     # Gitee 码云
     GITEE = "gitee"
-    
+
     # GitHub
     GITHUB = "github"
-    
-    # 微信
+
+    # 微信开放平台
     WECHAT = "wechat"
-    
+
+    # 企业微信 WeCom
+    WECOM = "wecom"
+
     # QQ
     QQ = "qq"
-    
+
     # 微博
     WEIBO = "weibo"
 
