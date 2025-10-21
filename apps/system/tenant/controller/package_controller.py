@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-租户套餐管理控制器 - 一比一复刻PackageController
+租户套餐管理控制器
 """
 
 from fastapi import APIRouter, Depends, Query as QueryParam
@@ -14,6 +14,7 @@ from apps.common.models.page_query import PageQuery
 from apps.common.models.api_response import create_success_response, ApiResponse
 
 from apps.common.config.logging import get_logger
+from apps.system.core.service.menu_service import get_menu_service, MenuService
 
 logger = get_logger(__name__)
 
@@ -111,3 +112,33 @@ async def delete_packages(
     """
     await package_service.delete(ids)
     return create_success_response(message="删除成功")
+
+
+@router.get("/menu/tree", summary="查询租户套餐菜单树")
+async def get_package_menu_tree(
+    exclude_menu_ids: List[int] = QueryParam(None, description="排除的菜单ID列表"),
+    is_simple: bool = QueryParam(True, description="是否只返回简单信息"),
+    menu_service: MenuService = Depends(get_menu_service),
+) -> ApiResponse:
+    """
+    查询租户套餐菜单树（用于套餐管理新增/编辑页面）
+    
+    对应参考项目: PackageController.listMenuTree(excludeMenuIds, isSimple)
+    
+    Args:
+        exclude_menu_ids: 排除的菜单ID列表（租户不能使用的菜单）
+        is_simple: 是否只返回简单信息（默认true）
+        menu_service: 菜单服务
+        
+    Returns:
+        菜单树列表
+    """
+    logger.info(f"查询租户套餐菜单树, exclude_menu_ids={exclude_menu_ids}, is_simple={is_simple}")
+    
+    # 调用菜单服务的list_tree_for_tenant方法
+    menu_tree = await menu_service.list_tree_for_tenant(
+        exclude_menu_ids=exclude_menu_ids,
+        is_simple=is_simple
+    )
+    
+    return create_success_response(data=menu_tree)
