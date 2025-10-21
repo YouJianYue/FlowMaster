@@ -77,8 +77,18 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
         except HTTPException as e:
             return self._create_error_response(e.status_code, e.detail)
-        except Exception:
-            return self._create_error_response(500, "内部服务器错误")
+        except Exception as e:
+            # 🔥 输出详细的异常信息
+            import traceback
+            error_detail = f"{type(e).__name__}: {str(e)}"
+            print(f"🔥🔥🔥 [JWT中间件] 捕获到异常: {error_detail}")
+            print(f"🔥🔥🔥 [JWT中间件] 堆栈跟踪:\n{traceback.format_exc()}")
+
+            from apps.common.config.logging import get_logger
+            logger = get_logger(__name__)
+            logger.error(f"JWT中间件异常: {error_detail}", exc_info=True)
+
+            return self._create_error_response(500, f"内部服务器错误: {error_detail}")
         # 注意：不在这里清理上下文，让TenantMiddleware来清理
         # 因为TenantMiddleware是内层中间件，会在JWT中间件之后才完成
     

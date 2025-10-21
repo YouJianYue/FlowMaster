@@ -10,56 +10,73 @@ from pydantic.alias_generators import to_camel
 
 
 class LoginResp(BaseModel):
-    """登录响应 - 匹配参考项目格式"""
-    
+    """
+    登录响应 - 一比一复刻参考项目LoginResp
+
+    🔥 核心字段（参考项目定义）:
+    - token: 令牌
+    - tenantId: 租户ID
+
+    🔥 扩展字段（可选，兼容前端需求）:
+    - accessToken: 访问令牌（与token相同，向后兼容）
+    - refreshToken: 刷新令牌
+    - tokenType: 令牌类型
+    - expiresIn: 过期时间
+    - userInfo: 用户信息
+    """
+
+    # ========== 核心字段（参考项目定义，必需） ==========
+
     # 令牌 (与参考项目保持一致)
     token: str = Field(
         ...,
         description="令牌",
         json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
     )
-    
+
     # 租户ID (与参考项目保持一致)
     tenant_id: int = Field(
         default=1,
         description="租户ID",
         json_schema_extra={"example": 1}
     )
-    
-    # 访问令牌 (向后兼容，与token相同)
-    access_token: str = Field(
-        ...,
-        description="访问令牌",
+
+    # ========== 扩展字段（可选，兼容性） ==========
+
+    # 访问令牌 (向后兼容,与token相同) - 标记为可选
+    access_token: Optional[str] = Field(
+        default=None,
+        description="访问令牌（与token相同，向后兼容）",
         json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
     )
-    
-    # 刷新令牌
-    refresh_token: str = Field(
-        ...,
-        description="刷新令牌", 
+
+    # 刷新令牌 - 标记为可选
+    refresh_token: Optional[str] = Field(
+        default=None,
+        description="刷新令牌",
         json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
     )
-    
+
     # 令牌类型
     token_type: str = Field(
         default="bearer",
         description="令牌类型",
         json_schema_extra={"example": "bearer"}
     )
-    
-    # 过期时间(秒)
-    expires_in: int = Field(
-        ...,
+
+    # 过期时间(秒) - 标记为可选
+    expires_in: Optional[int] = Field(
+        default=None,
         description="过期时间(秒)",
         json_schema_extra={"example": 86400}
     )
-    
-    # 用户信息
+
+    # 用户信息 - 标记为可选
     user_info: Optional['UserInfoResp'] = Field(
         default=None,
         description="用户信息"
     )
-    
+
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
