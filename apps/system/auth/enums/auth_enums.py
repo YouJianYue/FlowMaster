@@ -51,9 +51,6 @@ class SocialSourceEnum(str, Enum):
     # 微信开放平台
     WECHAT = "wechat"
 
-    # 企业微信 WeCom
-    WECOM = "wecom"
-
     # QQ
     QQ = "qq"
 

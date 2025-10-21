@@ -195,14 +195,12 @@ class LogWriterService:
 
             login_description, field_name = auth_type_map[auth_type]
 
-            # 🔥 重构：统一查询逻辑，消除重复代码
             field_value = body_data.get(field_name)
             if not field_value:
                 return None, login_description
 
             logger.info(f"[DEBUG] {login_description}，{field_name}={field_value}")
 
-            # 🔥 一比一复刻参考项目：添加租户隔离过滤
             from apps.common.context.tenant_context_holder import TenantContextHolder
 
             # 根据字段名动态构建查询条件

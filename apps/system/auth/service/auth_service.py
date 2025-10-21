@@ -243,14 +243,6 @@ class AuthService:
                 authorize_url = dingtalk_client.get_authorize_url(state)
                 logger.info(f"🔥 [步骤3] 钉钉授权URL获取成功: {authorize_url}")
 
-            elif source == SocialSourceEnum.WECOM.value:
-                # 企业微信OAuth
-                logger.info(f"🔥 [步骤3] 开始获取企业微信授权URL...")
-                from apps.system.auth.oauth.wecom_oauth import WeComOAuthClient
-
-                wecom_client = WeComOAuthClient()
-                authorize_url = wecom_client.get_authorize_url(state)
-
             elif source == SocialSourceEnum.GITEE.value:
                 # Gitee OAuth
                 logger.info(f"🔥 [步骤3] 开始获取Gitee授权URL...")
