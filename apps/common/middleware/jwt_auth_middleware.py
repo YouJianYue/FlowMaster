@@ -20,24 +20,15 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, exclude_paths: Optional[List[str]] = None):
         """
         初始化中间件
-        
+
         Args:
             app: FastAPI应用实例
             exclude_paths: 排除路径列表，这些路径不需要认证
         """
         super().__init__(app)
-        
-        # 默认排除路径
-        self.exclude_paths = exclude_paths or [
-            "/docs",
-            "/redoc", 
-            "/openapi.json",
-            "/health",
-            "/auth/login",
-            "/auth/refresh",
-            "/auth/check",
-            "/auth/social/authorize",
-        ]
+
+        # 使用传入的排除路径，如果没有传入则使用空列表（由配置层提供默认值）
+        self.exclude_paths = exclude_paths or []
     
     async def dispatch(self, request: Request, call_next) -> Response:
         """

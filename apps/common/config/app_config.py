@@ -71,7 +71,7 @@ class AppConfig(BaseSettings):
                 "/auth/login",
                 "/auth/refresh",
                 "/auth/check",
-                "/auth/social/authorize/*",  # 第三方登录授权
+                "/auth/social/authorize/**",  # 第三方登录授权（支持路径参数）
                 "/captcha",
                 "/captcha/**",
                 "/system/common/dict/**",
