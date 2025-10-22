@@ -21,7 +21,6 @@ from apps.system.core.controller import (
     user_router,
     menu_router,
     role_router,
-    system_common_router,
     user_profile_router,
     notice_router,
     dict_router,
@@ -31,7 +30,10 @@ from apps.system.core.controller import (
 )
 
 # 租户管理路由
-from apps.system.tenant.controller import package_router, tenant_management_router
+from apps.system.tenant.controller import package_router, tenant_management_router, tenant_common_router
+
+# 工作流路由
+from apps.workflow.controller import router as workflow_router
 
 # 开放平台路由
 from apps.system.open.controller import app_router
@@ -67,10 +69,10 @@ def register_routers(app: FastAPI) -> None:
         # 系统配置
         option_router,
         common_router,
-        system_common_router,
         # 租户路由（注意顺序）
         package_router,            # /tenant/package
         tenant_management_router,  # /tenant/management
+        tenant_common_router,      # /tenant/common
         tenant_router,             # /tenant (动态路由，必须最后)
         # 系统核心功能
         user_message_router,
@@ -83,6 +85,8 @@ def register_routers(app: FastAPI) -> None:
         notice_router,
         file_router,
         log_router,
+        # 工作流
+        workflow_router,
         # 开放平台
         app_router,
         # WebSocket

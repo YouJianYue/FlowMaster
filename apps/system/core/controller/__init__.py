@@ -11,7 +11,6 @@ from .dept_controller import router as dept_router
 from .user_controller import router as user_router
 from .menu_controller import router as menu_router
 from .role_controller import router as role_router
-from .common_controller import router as system_common_router
 from .user_profile_controller import router as user_profile_router
 from .notice_controller import router as notice_router
 from .dict_controller import router as dict_router
@@ -27,7 +26,6 @@ __all__ = [
     "user_router",
     "menu_router",
     "role_router",
-    "system_common_router",
     "user_profile_router",
     "notice_router",
     "dict_router",
