@@ -141,9 +141,10 @@ async def update_dept_status(
     """
     try:
         # 使用Service层更新状态，符合分层架构
-        success = await dept_service.update_dept_status(dept_id, status_req.status)
+        # 注意：status_req.status 是枚举对象，需要传递其 value_code 属性
+        success = await dept_service.update_dept_status(dept_id, status_req.status.value)
 
-        status_text = "启用" if status_req.status == 1 else "禁用"
+        status_text = "启用" if status_req.status.value == 1 else "禁用"
         return create_success_response(data=success, message=f"{status_text}成功")
 
     except ValueError as e:

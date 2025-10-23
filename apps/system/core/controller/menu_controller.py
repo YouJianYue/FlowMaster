@@ -12,6 +12,7 @@ from apps.system.core.service.menu_service import MenuService, get_menu_service
 from apps.system.core.model.req.menu_req import MenuReq
 from apps.system.core.model.resp.menu_resp import MenuResp
 from apps.common.models.req.common_status_update_req import CommonStatusUpdateReq
+from apps.common.enums.dis_enable_status_enum import DisEnableStatusEnum
 from apps.common.dependencies import get_current_user
 from apps.common.context.user_context import UserContext
 from apps.common.config.database.database_session import DatabaseSession
@@ -234,8 +235,9 @@ async def update_menu_status(
     """
     try:
         # 调用服务层更新状态
-        await menu_service.update_menu_status(menu_id, status_req.status)
-        status_text = "启用" if status_req.status == 1 else "禁用"
+        # 注意：status_req.status 是枚举对象，需要传递其 value_code 属性
+        await menu_service.update_menu_status(menu_id, status_req.status.value)
+        status_text = "启用" if status_req.status == DisEnableStatusEnum.ENABLE else "禁用"
         return create_success_response(data=True, message=f"{status_text}成功")
 
     except Exception as e:

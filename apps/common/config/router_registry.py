@@ -4,7 +4,10 @@
 路由注册模块
 """
 
+import os
+from pathlib import Path
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 # 认证授权路由
 from apps.system.auth.controller import auth_router, online_user_router
@@ -43,6 +46,10 @@ from apps.common.websocket.websocket_controller import (
     websocket_router,
     api_router as websocket_api_router,
 )
+
+from apps.common.config.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def register_routers(app: FastAPI) -> None:
@@ -97,3 +104,18 @@ def register_routers(app: FastAPI) -> None:
     # 批量注册路由
     for router in routers:
         app.include_router(router)
+
+    # 注册静态文件服务（用于文件下载和图片预览）
+    try:
+        # 获取存储路径
+        storage_path = Path(os.getenv("STORAGE_LOCAL_ROOT_PATH", "./data/files"))
+
+        # 确保目录存在
+        storage_path.mkdir(parents=True, exist_ok=True)
+
+        # 注册静态文件路由
+        app.mount("/files", StaticFiles(directory=str(storage_path)), name="static_files")
+
+        logger.info(f"静态文件服务已注册: /files -> {storage_path}")
+    except Exception as e:
+        logger.error(f"注册静态文件服务失败: {e}", exc_info=True)

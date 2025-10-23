@@ -266,7 +266,7 @@ class MenuServiceImpl(MenuService):
             menu_entity = MenuEntity(
                 title=menu_req.title,
                 parent_id=menu_req.parent_id if menu_req.parent_id else 0,
-                type=menu_req.type,
+                type=menu_req.type.value,  # 枚举对象转��数
                 path=menu_req.path,
                 name=menu_req.name,
                 component=component,
@@ -281,7 +281,7 @@ class MenuServiceImpl(MenuService):
                 else False,
                 permission=menu_req.permission,
                 sort=menu_req.sort,
-                status=menu_req.status,
+                status=menu_req.status.value,  # 枚举对象转整数
                 create_user=current_user_id,
                 create_time=datetime.now(),
             )
@@ -334,7 +334,7 @@ class MenuServiceImpl(MenuService):
             # 更新字段
             menu_entity.title = menu_req.title
             menu_entity.parent_id = menu_req.parent_id if menu_req.parent_id else 0
-            menu_entity.type = menu_req.type
+            menu_entity.type = menu_req.type.value  # 枚举对象转整数
             menu_entity.path = menu_req.path
             menu_entity.name = menu_req.name
             menu_entity.component = menu_req.component
@@ -351,7 +351,7 @@ class MenuServiceImpl(MenuService):
             )
             menu_entity.permission = menu_req.permission
             menu_entity.sort = menu_req.sort
-            menu_entity.status = menu_req.status
+            menu_entity.status = menu_req.status.value  # 枚举对象转整数
             menu_entity.update_user = current_user_id
             menu_entity.update_time = datetime.now()
 

@@ -114,10 +114,12 @@ async def list_site_option_dict():
         options = await option_service.list(query)
 
         # 转换为前端期望的格式：LabelValueResp<String>
+        # 一比一复刻：StrUtil.nullToDefault(option.getValue(), option.getDefaultValue())
+        # 确保value不为None，避免响应验证错误
         result = [
             {
                 "label": opt.code,
-                "value": opt.value if opt.value is not None else opt.default_value
+                "value": opt.value or opt.default_value or ""
             }
             for opt in options
         ]

@@ -13,6 +13,9 @@ from apps.common.config.database.models import print_registered_models, validate
 from apps.common.config.database.auto_fill_handler import register_auto_fill_listeners
 from apps.common.base.model.entity.base_entity import Base
 from apps.common.config.rsa_properties import RsaProperties
+from apps.common.config.storage_properties import StorageProperties
+from apps.common.storage.local_storage_handler import LocalStorageHandler
+from apps.common.storage.storage_manager import storage_manager
 
 
 @asynccontextmanager
@@ -43,6 +46,32 @@ async def lifespan(_app: FastAPI):
         # 检查数据库状态
         db_status = await check_db_status()
         logger.info(f"数据库状态: {db_status}")
+
+        # 3. 初始化文件存储系统
+        logger.info("初始化文件存储系统...")
+        try:
+            # 配置本地存储
+            local_storage = LocalStorageHandler(
+                root_path=StorageProperties.LOCAL_ROOT_PATH,
+                domain=StorageProperties.LOCAL_DOMAIN,
+                max_file_size=StorageProperties.MAX_FILE_SIZE
+            )
+
+            # 注册到存储管理器
+            storage_manager.register_storage(
+                code="local_storage",
+                handler=local_storage,
+                is_default=True
+            )
+
+            logger.info(
+                f"本地存储系统初始化成功: "
+                f"root_path={StorageProperties.LOCAL_ROOT_PATH}, "
+                f"max_size={StorageProperties.MAX_FILE_SIZE / 1024 / 1024:.1f}MB"
+            )
+        except Exception as e:
+            logger.error(f"存储系统初始化失败: {e}", exc_info=True)
+            raise
 
         logger.info("FlowMaster 应用启动成功!")
 

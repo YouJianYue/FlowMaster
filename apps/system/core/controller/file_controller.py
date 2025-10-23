@@ -8,7 +8,9 @@
 """
 
 from fastapi import APIRouter, Query, Path, Depends, UploadFile, File, HTTPException
+from fastapi.responses import Response
 from typing import Optional
+from urllib.parse import quote
 
 from apps.common.dependencies import get_current_user
 from apps.common.context.user_context import UserContext
@@ -20,6 +22,10 @@ from apps.system.core.model.query.file_query import FileQuery
 from apps.system.core.model.req.file_req import FileReq
 from apps.system.core.model.resp.file_resp import FileResp
 from apps.system.core.model.resp.file_upload_resp import FileUploadResp, FileStatisticsResp, FileDirCalcSizeResp
+from apps.common.storage.storage_manager import storage_manager
+from apps.common.config.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/system/file", tags=["文件管理 API"])
 
@@ -90,9 +96,6 @@ async def create_dir(
     user_context: UserContext = Depends(get_current_user),
 ):
     """创建文件夹"""
-    if not req.parent_path:
-        raise HTTPException(status_code=400, detail="上级目录不能为空")
-
     dir_id = await file_service.create_dir(req)
     return create_success_response(data=IdResp(id=dir_id))
 
@@ -174,3 +177,43 @@ async def batch_delete_files(
 
     await file_service.batch_delete(id_list)
     return create_success_response()
+
+
+@router.get(
+    "/{id}/download",
+    summary="下载文件",
+    description="下载文件"
+)
+async def download_file(
+    id: int = Path(..., description="文件ID", gt=0),
+    user_context: UserContext = Depends(get_current_user),
+):
+    """下载文件"""
+    try:
+        # 获取文件信息
+        file_info = await file_service.get(id)
+        if not file_info:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+        # 获取存储处理器
+        handler = storage_manager.get_handler()
+
+        # 下载文件内容
+        content = await handler.download_file(file_info.path)
+
+        # 设置响应头
+        filename = quote(file_info.original_name.encode('utf-8'))
+
+        return Response(
+            content=content,
+            media_type=file_info.content_type or "application/octet-stream",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{filename}"
+            }
+        )
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    except Exception as e:
+        logger.error(f"文件下载失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"文件下载失败: {str(e)}")
